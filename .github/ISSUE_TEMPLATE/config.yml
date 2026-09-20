@@ -1,0 +1,14 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://github.com/MaelllDev/discord-bot-host/tree/main/docs
+    about: Installation, configuration, deployment, troubleshooting, security and backups.
+  - name: Troubleshooting guide
+    url: https://github.com/MaelllDev/discord-bot-host/blob/main/docs/troubleshooting.md
+    about: Most problems (Docker offline, port in use, crash loops, WebSocket) are covered here.
+  - name: Security problem
+    url: https://github.com/MaelllDev/discord-bot-host/security/policy
+    about: Please report vulnerabilities privately, never in a public issue.
+  - name: Discord community
+    url: https://discord.com/invite/xykJqCUeNt
+    about: Questions and general help.

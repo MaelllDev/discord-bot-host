@@ -1,0 +1,45 @@
+name: Feature request
+description: Suggest an improvement or a new capability
+title: "[Feature] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        BotPanel aims at being a small, readable, self-hostable panel. Features that add a lot of
+        surface (multi-user, billing, orchestration of many machines) are usually out of scope —
+        explaining *the problem* you have helps a lot.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      placeholder: I host several bots and I cannot tell which one is using the most memory.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like BotPanel to do?
+      placeholder: Show a per-application memory graph for the last hour.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you considered
+      placeholder: The Dashboard already shows current usage, but not a history.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This is useful for a single administrator hosting their own bots (not a hosting business).
+          required: false
+        - label: I am willing to implement it.
+          required: false

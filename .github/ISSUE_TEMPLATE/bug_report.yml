@@ -1,0 +1,83 @@
+name: Bug report
+description: Something does not work as documented
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a problem.
+
+        **Never paste real secrets** (passwords, bot tokens, API keys) or private data in an issue.
+        Replace them with `<redacted>`.
+
+        Before opening an issue, please check
+        [docs/troubleshooting.md](https://github.com/MaelllDev/discord-bot-host/blob/main/docs/troubleshooting.md).
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what actually happened.
+      placeholder: |
+        1. Opened application X
+        2. Pressed Stop
+        3. Expected the status to become "Stopped", got "Crashed"
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: BotPanel version
+      description: Shown in the System page (or `node -p 'require("./server/package.json").version'`).
+      placeholder: 1.0.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: installation
+    attributes:
+      label: How did you install it?
+      options:
+        - scripts/install.sh
+        - Manual steps from docs/installation.md
+        - Running from source (development)
+        - Docker/other
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Output of the commands below (fill in the values).
+      value: |
+        OS: (cat /etc/os-release | head -2)
+        Node: (node -v)
+        Docker: (docker --version)
+        Panel service: (systemctl is-active botpanel)
+        Docker service: (systemctl is-active docker)
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: |
+        Panel log: `journalctl -u botpanel -n 100 --no-pager`
+        Application log: the Logs tab (with tokens removed).
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: Checklist
+      options:
+        - label: I removed every secret from the logs and screenshots.
+          required: true
+        - label: I searched the existing issues for the same problem.
+          required: true

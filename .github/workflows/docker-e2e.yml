@@ -1,0 +1,48 @@
+name: Docker E2E
+
+# The end-to-end suite creates real containers, installs real dependencies and
+# (optionally) restarts the Docker daemon. It needs a Docker-enabled runner and
+# a few minutes, so it is triggered manually.
+#
+#   Actions → Docker E2E → Run workflow
+#
+# Add "restart_docker: true" in the run inputs to also exercise the daemon
+# restart path.
+on:
+  workflow_dispatch:
+    inputs:
+      restart_docker:
+        description: Also restart the Docker daemon during the suite
+        type: boolean
+        default: false
+
+jobs:
+  e2e:
+    name: container lifecycle
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Docker version
+        run: docker version
+
+      # The suite writes application files owned by BOTPANEL_RUN_UID (1000) and
+      # runs containers as that user, exactly like the panel does on a VPS.
+      # Running it as root keeps the ownership model realistic.
+      - name: Docker end-to-end suite
+        env:
+          BOTPANEL_E2E: "1"
+          BOTPANEL_E2E_DOCKER_RESTART: ${{ inputs.restart_docker && '1' || '' }}
+        run: sudo -E env "PATH=$PATH" npm run test:e2e

@@ -1,0 +1,64 @@
+# ==============================================================================
+# BotPanel — systemd unit (template)
+#
+# `scripts/install.sh` fills in the @PLACEHOLDER@ values and installs this file
+# as /etc/systemd/system/botpanel.service. If you prefer to install it by hand:
+#
+#   sudo sed -e 's|@PANEL_DIR@|/opt/botpanel|g' \
+#            -e 's|@DATA_DIR@|/var/lib/botpanel|g' \
+#            -e 's|@ENV_FILE@|/etc/botpanel.env|g' \
+#            -e 's|@NODE_BIN@|'"$(command -v node)"'|g' \
+#            -e 's|@SERVICE_USER@|root|g' \
+#            deploy/botpanel.service | sudo tee /etc/systemd/system/botpanel.service
+#   sudo systemctl daemon-reload && sudo systemctl enable --now botpanel
+#
+# Placeholders:
+#   @PANEL_DIR@     where the project was cloned/built (e.g. /opt/botpanel)
+#   @DATA_DIR@      database, releases and persistent /data volumes
+#   @ENV_FILE@      environment file created from .env.example
+#   @NODE_BIN@      absolute path of the node binary (>= 22)
+#   @SERVICE_USER@  user the panel runs as (needs access to the Docker socket)
+# ==============================================================================
+[Unit]
+Description=BotPanel — private control panel for hosting bots and apps
+Documentation=file:@PANEL_DIR@/README.md
+After=network-online.target docker.service
+# `Wants` (not `Requires`): restarting the Docker daemon must not take the panel
+# down — it reconnects to the socket by itself. With `Requires`, a
+# `systemctl restart docker` used to stop the panel and bring it back as a brand
+# new instance restarting together with the daemon.
+Wants=network-online.target docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=@PANEL_DIR@
+EnvironmentFile=-@ENV_FILE@
+Environment=NODE_ENV=production
+ExecStart=@NODE_BIN@ @PANEL_DIR@/server/dist/index.js
+Restart=always
+RestartSec=3
+TimeoutStopSec=20
+
+# The panel needs the Docker socket and permission to set the owner of the
+# application files (the containers run as BOTPANEL_RUN_UID). See
+# docs/security.md for the reasoning behind running as root and the options.
+User=@SERVICE_USER@
+Group=@SERVICE_USER@
+
+# Hardening: no SUID, read-only filesystem except the data directory.
+NoNewPrivileges=yes
+ProtectSystem=full
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=no
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+RestrictSUIDSGID=yes
+RestrictRealtime=yes
+ReadWritePaths=@DATA_DIR@
+
+LimitNOFILE=65535
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,40 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+*.tsbuildinfo
+
+# Environment and secrets
+.env
+.env.local
+.env.*.local
+*.pem
+*.key
+
+# Runtime data (never belongs in the repository)
+data/
+*.sqlite
+*.sqlite3
+*.db
+*.db-wal
+*.db-shm
+.session-secret
+.initial-password
+uploads/
+releases/
+backups/
+
+# Logs and caches
+*.log
+npm-debug.log*
+coverage/
+.vite/
+.cache/
+
+# Editors and OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
