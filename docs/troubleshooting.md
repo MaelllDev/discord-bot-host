@@ -8,6 +8,37 @@ sudo journalctl -u botpanel -n 100 --no-pager
 docker ps -a --filter label=botpanel.app
 ```
 
+## The installer stops: no systemd (containers, Codespaces)
+
+```
+[!] This host is not running systemd, so the BotPanel service cannot be installed here.
+```
+
+That is the installer refusing to pretend. The production installation *is* a systemd service, and
+containers (Docker, GitHub Codespaces, dev containers, CI runners) do not run systemd as PID 1, so
+there is nothing to install the unit into. The check runs before Docker, Node.js, dependencies or
+files are touched, so the machine is left exactly as it was and the script exits non-zero.
+
+| What you actually want | What to do |
+|---|---|
+| The normal installation | Run the installer on the VPS/host itself, not inside a container. |
+| Build only, run the panel by hand | `sudo bash scripts/install.sh --no-service` (prints the exact start command, never claims an installation). |
+| Active development | `npm install` then `npm run dev` + `npm run dev:web` — no root needed. See [development.md](development.md). |
+
+## The installer fails the health check
+
+```
+[!] The panel is not answering on http://127.0.0.1:8080/api/health.
+...
+[x] BotPanel was NOT installed successfully: the systemd service is not serving the panel.
+```
+
+The installer now prints the unit status and the last journal lines before exiting non-zero, and it
+never prints the URL in this case. Nothing is rolled back; fix the cause and run it again (it is
+idempotent). The usual causes are the ones listed in [the panel does not start](#the-panel-does-not-start)
+below: a port already in use, a wrong `ExecStart`/`NODE_BIN`, an unparsable environment file. To wait
+longer on a slow machine, set `BOTPANEL_INSTALL_HEALTH_TIMEOUT=120` (seconds).
+
 ## The panel does not start
 
 | Check | Command |

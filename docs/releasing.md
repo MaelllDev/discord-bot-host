@@ -27,6 +27,7 @@ complete validation suite and refuses to continue when anything fails.
 | 4. Changelog | inserts `## [x.y.z] - date` right after `## [Unreleased]` and updates the link references at the bottom |
 | 5. README | updates the version badge |
 | 6. Validation | `npm run typecheck`, `npm test`, `npm run build` and, unless skipped, the Docker E2E suite (`BOTPANEL_E2E=1 npm run test:e2e`) — **any failure aborts the release** |
+| 6b. E2E sandbox | the suite runs with `TMPDIR` pointed at a directory the release owns, so its data directory can always be found; traps on `EXIT`/`INT`/`TERM` remove the containers, networks and temporary directories that run created, even when the script is killed |
 | 7. Safety | refuses to commit `.env`, `node_modules`, `dist`, databases, `*.session-secret`, key/token patterns or private IP addresses |
 | 8. Review | prints `git status --short` and a diff stat, then asks for confirmation |
 | 9. Publish | commits `release: vX.Y.Z`, creates the annotated tag `vX.Y.Z`, pushes the branch and the tag |
@@ -43,6 +44,7 @@ complete validation suite and refuses to continue when anything fails.
 | `--repo /path` | Repository to update (default: this repository) |
 | `--remote origin`, `--branch main` | Where to push |
 | `--skip-e2e` | Skip the Docker suite (not recommended; the release still needs typecheck/tests/build) |
+| `--cleanup-e2e [dir]` | Remove what an interrupted E2E run left behind (containers, networks, temporary directories) and exit. With a data directory it targets that run exactly; without it, every `botpanel-e2e-*` directory under `$TMPDIR` is used |
 | `--allow-dirty` | Allow a dirty working tree |
 | `--no-push` | Commit and tag locally only |
 | `--bump-production` | Also write the version into the source installation |
@@ -107,6 +109,33 @@ If you add a new top-level source directory, add it to `SYNC_DIRS` or `SYNC_FILE
    your own — or keep them if you are contributing upstream.
 2. Check `NOTICE.md`: do not commit artwork you did not create.
 3. Run `bash scripts/release.sh --dry-run` and read the file list.
+
+## If an E2E run is interrupted
+
+The Docker suite creates its own containers, networks and data directory. A complete run removes them
+in its `afterAll`; a run that is killed (closed terminal, `Ctrl-C`, session died, failed assertion)
+cannot — so `scripts/release.sh` cleans up after it with a trap, whether it fails or is interrupted.
+
+To recover the leftovers of an **older** aborted run:
+
+```bash
+# what is there?
+docker ps -a --filter label=botpanel.instance --format '{{.Names}} {{.Label "botpanel.instance"}}'
+docker network ls --filter label=botpanel.instance --format '{{.Name}} {{.Label "botpanel.instance"}}'
+find "${TMPDIR:-/tmp}" -maxdepth 2 -type d -name 'botpanel-e2e-*'
+
+# remove one run exactly (the directory printed by the suite)
+bash scripts/release.sh --cleanup-e2e /tmp/botpanel-e2e-XXXXXXXX
+
+# or every run that left a data directory behind
+bash scripts/release.sh --cleanup-e2e
+```
+
+Cleanup is always scoped: every container and network of a BotPanel instance carries the label
+`botpanel.instance`, and the helper only deletes artifacts of the data directories you point it at
+(or of instances that appeared while the suite was running). Applications of a panel running on the
+same machine belong to a different instance and are never touched — verified against the running
+panel before every release.
 
 ## If a release goes wrong
 

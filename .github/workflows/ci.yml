@@ -38,6 +38,9 @@ jobs:
       - name: Production build
         run: npm run build
 
+      - name: Installer behaviour tests (throwaway container)
+        run: bash scripts/tests/install.test.sh
+
       - name: Repository hygiene
         run: |
           set -e

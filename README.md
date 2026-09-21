@@ -9,7 +9,7 @@ It is designed for **one administrator hosting their own projects** (Discord bot
 APIs). It is *not* a multi-tenant hosting business: there are no plans, no customers, no per-user
 permissions.
 
-![Version](https://img.shields.io/badge/version-1.0.0-6366f1)
+![Version](https://img.shields.io/badge/version-1.0.1-6366f1)
 ![License](https://img.shields.io/badge/license-MIT-8b5cf6)
 ![Node](https://img.shields.io/badge/node-%3E%3D22-3c873a)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%2B%20Docker-0db7ed)
@@ -170,6 +170,8 @@ More detail: [docs/architecture.md](docs/architecture.md).
   Docker + systemd and Node.js ≥ 22 should work).
 - **Docker** — the daemon must be reachable on the socket (default `/var/run/docker.sock`).
 - **Node.js ≥ 22** and **npm** (needed to build and to run the panel).
+- **systemd** — the installation is a systemd service (start on boot, restart on failure). The
+  installer verifies it and stops with an explanation inside containers that have no systemd.
 - **Root (or sudo)** for the installation — the panel talks to the Docker socket and sets the owner
   of the application files.
 - ~1.5 GB of free disk for the panel itself plus whatever your applications need.
@@ -189,19 +191,27 @@ sudo bash scripts/install.sh
 
 The installer:
 
-1. checks the operating system and the required tools,
+1. checks the operating system, the required tools and that systemd is the init system,
 2. installs Docker and Node.js ≥ 22 when missing,
 3. installs the project dependencies, builds the backend and the frontend,
 4. creates the data directory (`/var/lib/botpanel` by default),
 5. creates `/etc/botpanel.env` with a **randomly generated password** (it prints it at the end),
 6. installs, enables and starts the `botpanel` systemd service,
-7. waits for `/api/health` and prints the URL and the useful commands.
+7. waits for `/api/health` and only then prints the URL and the useful commands.
 
 It is idempotent: running it again updates an existing installation and keeps your environment file
-and data intact.
+and data intact. If the service does not answer `/api/health`, the installer prints the unit status
+and the journal and **exits non-zero** — it never reports an installation that did not happen.
 
-Useful flags: `--panel-dir`, `--data-dir`, `--env-file`, `--port`, `--service-user`, `--no-service`,
-`--no-deps`, `--force`. `sudo bash scripts/install.sh --help` lists them all.
+> **Containers have no systemd.** Inside Docker, GitHub Codespaces, dev containers or CI runners the
+> service cannot be installed, so the installer detects that and stops with an explanation before
+> installing anything. Add `--no-service` to build only: it then states clearly that the panel is
+> not running instead of printing a production URL. See
+> [docs/installation.md](docs/installation.md#hosts-without-systemd-containers-codespaces).
+
+Useful flags: `--panel-dir`, `--data-dir`, `--env-file`, `--port`, `--service-user`, `--no-deps`,
+`--force`, and `--no-service` (development/container mode: build only, nothing is installed or
+started). `sudo bash scripts/install.sh --help` lists them all.
 
 ### Manual
 
@@ -416,10 +426,11 @@ See [docs/development.md](docs/development.md) for the layout, conventions and h
 ## Testing
 
 ```bash
-npm run typecheck      # backend + frontend + test types
-npm test               # backend unit/integration + frontend render tests (no Docker)
-npm run test:e2e       # full container lifecycle against real Docker (needs root)
-npm run build          # production build (frontend + backend)
+npm run typecheck                    # backend + frontend + test types
+npm test                             # backend unit/integration + frontend render tests (no Docker)
+npm run test:e2e                     # full container lifecycle against real Docker (needs root)
+npm run build                        # production build (frontend + backend)
+bash scripts/tests/install.test.sh   # installer behaviour tests (needs Docker)
 ```
 
 - **Backend tests** (vitest): zip-slip protection, path traversal, runtime detection, command
@@ -429,6 +440,11 @@ npm run build          # production build (frontend + backend)
 - **Frontend render tests** (vitest + jsdom): pages are actually mounted, which catches runtime
   errors that only appear in the browser (the class of bug that produces a white screen), plus the
   error boundary.
+- **Installer tests** (`scripts/tests/install.test.sh`): `scripts/install.sh` runs inside a throwaway
+  container with a stubbed init system and PATH. They prove that a host without systemd fails
+  immediately with a clear message and touches nothing, that `--no-service` builds the project but
+  never claims a production installation, that a service which never becomes healthy exits non-zero
+  with the diagnostics, and that the normal healthy path still prints the URL.
 - **Docker E2E** (`BOTPANEL_E2E=1`): a temporary panel instance validates, against the real daemon,
   container creation, real `npm install`/`pip install`, boot, RAM/CPU/PID limits (including a real
   OOM kill and automatic restart), isolation of files/processes/network between applications,
@@ -465,7 +481,8 @@ npm run build          # production build (frontend + backend)
 ├── scripts/
 │   ├── install.sh              # installer/updater
 │   ├── release.sh              # publish a new version (maintainers)
-│   └── generate-logo.mjs       # regenerates the default logo
+│   ├── generate-logo.mjs       # regenerates the default logo
+│   └── tests/install.test.sh   # installer behaviour tests (throwaway container)
 ├── docs/                       # detailed documentation
 ├── .env.example                # documented environment template
 ├── .github/                    # CI workflows, issue/PR templates

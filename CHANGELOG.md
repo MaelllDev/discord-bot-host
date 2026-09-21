@@ -10,6 +10,18 @@ before being published, so there is no earlier version history to import.
 
 ## [Unreleased]
 
+## [1.0.1] - 2026-09-21
+
+### Fixed
+- The installer can no longer report an installation that did not happen: it verifies that systemd is really the init system (PID 1) before touching the machine, so inside containers (Docker, GitHub Codespaces, dev containers, CI runners) it stops at once with an explanation instead of building everything and failing later.
+- A service that never answers /api/health now exits non-zero, prints the unit status and the journal, and the URL and the login instructions are printed only after the unit is active and the health check passed.
+- --no-service is now an explicit development/container mode: it builds the project, states that the panel is not running, never prints production commands, and tolerates a missing Docker daemon with a warning.
+### Added
+- scripts/tests/install.test.sh: five installer cases running inside a throwaway container (no systemd, development mode with and without Docker, a service that never becomes healthy, and the normal healthy path), wired into the CI workflow.
+- BOTPANEL_INSTALL_HEALTH_TIMEOUT to change how long the installer waits for /api/health (default 45 seconds).
+- Documentation for hosts without systemd (docs/installation.md, docs/troubleshooting.md).
+- `scripts/release.sh` now sandboxes the Docker E2E suite in a temporary directory it owns and removes the containers, networks and directories that run created when it fails or is interrupted; `--cleanup-e2e` recovers what an earlier aborted run left behind. Cleanup is scoped by the `botpanel.instance` label, so applications of a panel running on the same machine are never touched.
+
 ## [1.0.0] - 2026-09-20
 
 First public release.
@@ -71,5 +83,6 @@ First public release.
 - Test suite: backend unit/integration tests, frontend render tests (jsdom) and a Docker
   end-to-end suite covering the full container lifecycle.
 
-[Unreleased]: https://github.com/MaelllDev/discord-bot-host/compare/v1.0.0...HEAD
+[Unreleased]: https://github.com/MaelllDev/discord-bot-host/compare/v1.0.1...HEAD
+[1.0.1]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.0.1
 [1.0.0]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.0.0

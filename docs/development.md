@@ -120,6 +120,7 @@ npm test                # backend + frontend tests (no Docker needed)
 npm run test:e2e        # full container lifecycle (root + Docker)
 BOTPANEL_E2E_DOCKER_RESTART=1 npm run test:e2e   # also restarts the Docker daemon
 npm run build           # must stay clean before a release
+bash scripts/tests/install.test.sh   # installer behaviour (Docker required)
 ```
 
 Notes:
@@ -129,6 +130,24 @@ Notes:
 - Frontend render tests run in jsdom (`web/vitest.config.ts`). Mounting a page and asserting the
   visible text is the cheapest way to catch "it compiles but the page is blank".
 - A failed test is a failed release: `scripts/release.sh` refuses to publish.
+
+### Changing the installer
+
+`scripts/install.sh` is the entry point most users meet first, and it must never lie: it reports a
+production installation only after the systemd unit is active *and* `/api/health` answered. The suite
+in `scripts/tests/install.test.sh` runs the installer inside a throwaway `ubuntu:24.04` container
+with stubs for `systemctl`, `curl`, `npm`, `docker`, `node` and `hostname`, and covers four paths:
+
+| Case | What it proves |
+|---|---|
+| no systemd, production mode | exits non-zero, explains why, suggests `--no-service`, touches nothing |
+| `--no-service`, Docker up | builds the artifacts, exits 0, says the panel is **not** running, never claims otherwise |
+| `--no-service`, Docker down | warns and still exits 0 (a build does not need the daemon) |
+| systemd present, never healthy | exits non-zero, prints the diagnostics, prints no URL |
+| systemd present, health OK | exits 0, renders the unit and prints the URL |
+
+Add a case whenever you touch the installer, and run the suite before a release. `BOTPANEL_INSTALL_TEST_IMAGE`
+overrides the base image.
 
 ## Debugging the Docker side
 

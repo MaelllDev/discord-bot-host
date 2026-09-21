@@ -5,6 +5,7 @@ the manual path, and what to check if something goes wrong.
 
 - [Requirements](#requirements)
 - [Automated installation](#automated-installation)
+- [Hosts without systemd (containers, Codespaces)](#hosts-without-systemd-containers-codespaces)
 - [Manual installation](#manual-installation)
 - [Verifying the installation](#verifying-the-installation)
 - [Where things live](#where-things-live)
@@ -17,6 +18,7 @@ the manual path, and what to check if something goes wrong.
 | **Debian 12/13 or Ubuntu 22.04/24.04** | Other distributions work if they provide Docker, systemd and Node.js ≥ 22 (`--force`) |
 | **Docker** | The daemon must be reachable at `/var/run/docker.sock` |
 | **Node.js ≥ 22** with npm | Used to build the panel and to run it |
+| **systemd** | The installation is a systemd service. It is required in production mode; the installer verifies it before touching the machine (see [Hosts without systemd](#hosts-without-systemd-containers-codespaces)) |
 | **git** | Only to clone the repository |
 | **root / sudo** | The panel talks to the Docker socket and sets the owner of the application files |
 
@@ -42,7 +44,9 @@ sudo bash scripts/install.sh
 
 What the script does, in order:
 
-1. refuses to run as a normal user and checks the operating system,
+1. refuses to run as a normal user, checks the operating system and — in production mode — that
+   **systemd is the init system** (`/run/systemd/system`); on a host without systemd it stops right
+   there, before installing anything (see [below](#hosts-without-systemd-containers-codespaces)),
 2. installs `ca-certificates curl gnupg openssl` when missing,
 3. installs **Node.js 22.x** (NodeSource) when Node is missing or older than 22,
 4. installs **Docker** (`docker.io`) when missing and enables the service,
@@ -54,9 +58,17 @@ What the script does, in order:
 10. creates `/etc/botpanel.env` from `.env.example` with a **random 24-character password**
     (an existing file is never overwritten) and `chmod 600`,
 11. renders `deploy/botpanel.service` and installs it as
-    `/etc/systemd/system/botpanel.service`, then `enable --now`,
-12. polls `http://127.0.0.1:<port>/api/health` for up to 45 seconds,
+    `/etc/systemd/system/botpanel.service`, then `enable` + `restart`,
+12. polls `http://127.0.0.1:<port>/api/health` (up to 45 seconds, or
+    `BOTPANEL_INSTALL_HEALTH_TIMEOUT` seconds) until the body contains `"status":"ok"`
+    **and** `systemctl is-active botpanel` reports the unit as active,
 13. prints the URL, the password (when it generated one) and the useful commands.
+
+**A failure is a failure.** If the unit fails to start or never answers `/api/health`, the installer
+prints `systemctl status` and the last 40 journal lines and exits with a non-zero status. The URL and
+the "open the panel and log in" instructions are printed *only* after the health check passed, so a
+broken service can never look like a successful installation. Nothing is rolled back on failure: fix
+the error above and run the installer again (it is idempotent).
 
 ### Options
 
@@ -66,10 +78,14 @@ What the script does, in order:
 --env-file <path>      environment file (default: /etc/botpanel.env)
 --port <number>        HTTP port written to the environment file (default: 8080)
 --service-user <user>  user the service runs as (default: root)
---no-service           build only; do not install or start the systemd unit
+--no-service           development/container mode: build only, no systemd unit and no start
 --no-deps              do not install system packages (Docker/Node.js)
 --force                continue on an unsupported distribution
+--help                 list the options
 ```
+
+`BOTPANEL_INSTALL_HEALTH_TIMEOUT` (environment, default `45`) sets how many seconds the installer
+waits for `/api/health` before declaring the installation failed.
 
 Examples:
 
@@ -79,6 +95,40 @@ sudo bash scripts/install.sh --panel-dir /srv/botpanel --port 9090
 
 # build only (you manage the process yourself, e.g. inside a container)
 sudo bash scripts/install.sh --no-service
+```
+
+### Hosts without systemd (containers, Codespaces)
+
+The production installation is a **systemd service**: it starts on boot and restarts on failure.
+Containers (Docker, GitHub Codespaces, dev containers, CI runners) do not run systemd as PID 1, so
+there is nothing to install the unit into. The installer detects that (`/run/systemd/system` missing)
+and exits non-zero with an explanation, without installing Docker, Node.js, dependencies or files:
+
+```
+[!] This host is not running systemd, so the BotPanel service cannot be installed here.
+    Detected: Linux Ubuntu 24.04.1 LTS without systemd as PID 1 (no /run/systemd/system).
+    This is expected in containers: Docker, GitHub Codespaces, dev containers, CI runners.
+    ...
+    Nothing was installed, built or started.
+```
+
+To build and run the panel by hand in such an environment, ask for the development/container mode:
+
+```bash
+sudo bash scripts/install.sh --no-service
+```
+
+This mode builds the backend and the frontend, creates the data directory and the environment file,
+and then **stops**: it prints that the service was not installed and that the panel is not running,
+together with the exact commands to start it. It never prints a production URL and it tolerates a
+missing Docker daemon with a warning (a build does not need Docker). Exit status is `0`, because you
+explicitly asked for this mode.
+
+```bash
+# after --no-service, start the panel in the foreground
+sudo -i
+set -a; . /etc/botpanel.env; set +a
+NODE_ENV=production node /opt/botpanel/server/dist/index.js
 ```
 
 ### Re-running the installer
