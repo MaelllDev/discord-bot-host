@@ -121,6 +121,7 @@ npm run test:e2e        # full container lifecycle (root + Docker)
 BOTPANEL_E2E_DOCKER_RESTART=1 npm run test:e2e   # also restarts the Docker daemon
 npm run build           # must stay clean before a release
 bash scripts/tests/install.test.sh   # installer behaviour (Docker required)
+bash scripts/tests/release.test.sh   # release source synchronisation (no Docker)
 ```
 
 Notes:
@@ -148,6 +149,30 @@ with stubs for `systemctl`, `curl`, `npm`, `docker`, `node` and `hostname`, and 
 
 Add a case whenever you touch the installer, and run the suite before a release. `BOTPANEL_INSTALL_TEST_IMAGE`
 overrides the base image.
+
+### Changing the release workflow
+
+The release script is the only thing that writes source files into this repository, and a release that
+copies nothing is not obvious: the version bump, the changelog and the (already validated) tests are
+all in the repository, so the run looks successful while the published code stays old. That failure
+mode has happened, so the copy step has its own switch (`--sync-only`) and its own suite:
+
+```bash
+bash scripts/tests/release.test.sh
+```
+
+It creates a fake working project and a throwaway git repository under `$TMPDIR`, runs the real script
+against them and asserts the properties that matter:
+
+| Property | Why |
+|---|---|
+| a real run copies new and changed files | the file really arrives, with the source content |
+| a real run deletes what the source dropped | `rsync --delete` keeps mirrored directories honest |
+| both runs leave the source project byte-identical | releasing must never write to the working installation |
+| `--sync-only` does not bump the version or touch the changelog | it is a copy, not a release |
+| `--dry-run` changes nothing | inspection must be safe |
+
+Add a case whenever you change `SYNC_DIRS`, `SYNC_FILES` or the copy step.
 
 ## Debugging the Docker side
 

@@ -41,6 +41,9 @@ jobs:
       - name: Installer behaviour tests (throwaway container)
         run: bash scripts/tests/install.test.sh
 
+      - name: Release workflow tests (source synchronisation)
+        run: bash scripts/tests/release.test.sh
+
       - name: Repository hygiene
         run: |
           set -e

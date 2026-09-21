@@ -431,6 +431,7 @@ npm test                             # backend unit/integration + frontend rende
 npm run test:e2e                     # full container lifecycle against real Docker (needs root)
 npm run build                        # production build (frontend + backend)
 bash scripts/tests/install.test.sh   # installer behaviour tests (needs Docker)
+bash scripts/tests/release.test.sh   # release source synchronisation (no Docker)
 ```
 
 - **Backend tests** (vitest): zip-slip protection, path traversal, runtime detection, command
@@ -445,6 +446,11 @@ bash scripts/tests/install.test.sh   # installer behaviour tests (needs Docker)
   immediately with a clear message and touches nothing, that `--no-service` builds the project but
   never claims a production installation, that a service which never becomes healthy exits non-zero
   with the diagnostics, and that the normal healthy path still prints the URL.
+- **Release workflow tests** (`scripts/tests/release.test.sh`): the maintainer release script is the
+  only thing that copies source into this repository, so the copy is tested against a fake project and
+  a throwaway git repository: new and changed files really move, files dropped by the source disappear
+  from the repository, `--sync-only` leaves the version and the changelog untouched, and `--dry-run`
+  writes nothing.
 - **Docker E2E** (`BOTPANEL_E2E=1`): a temporary panel instance validates, against the real daemon,
   container creation, real `npm install`/`pip install`, boot, RAM/CPU/PID limits (including a real
   OOM kill and automatic restart), isolation of files/processes/network between applications,
@@ -482,7 +488,9 @@ bash scripts/tests/install.test.sh   # installer behaviour tests (needs Docker)
 │   ├── install.sh              # installer/updater
 │   ├── release.sh              # publish a new version (maintainers)
 │   ├── generate-logo.mjs       # regenerates the default logo
-│   └── tests/install.test.sh   # installer behaviour tests (throwaway container)
+│   └── tests/
+│       ├── install.test.sh     # installer behaviour tests (throwaway container)
+│       └── release.test.sh     # release source-synchronisation tests
 ├── docs/                       # detailed documentation
 ├── .env.example                # documented environment template
 ├── .github/                    # CI workflows, issue/PR templates

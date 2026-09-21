@@ -22,7 +22,7 @@ complete validation suite and refuses to continue when anything fails.
 | Step | Detail |
 |---|---|
 | 1. Checks | source project exists, the repository is a git repository, working tree is clean, `git`/`node`/`npm`/`rsync` are available |
-| 2. Synchronises | mirrors `server/src`, `server/tests`, `web/src`, `web/tests` (with `rsync --delete`, so deleted files disappear) and copies `package.json`, `package-lock.json`, the `tsconfig`s, the vite/vitest configs and `web/index.html` |
+| 2. Synchronises | mirrors `server/src`, `server/tests`, `web/src`, `web/tests` (with `rsync --delete`, so deleted files disappear) and copies `package.json`, `package-lock.json`, the `tsconfig`s, the vite/vitest configs and `web/index.html`. It reports how many directories and files it copied, and the step can be exercised on its own with `--sync-only`. |
 | 3. Version | sets the new version on the root, `server/` and `web/` `package.json` with `npm version … --workspaces --include-workspace-root` and verifies the three match |
 | 4. Changelog | inserts `## [x.y.z] - date` right after `## [Unreleased]` and updates the link references at the bottom |
 | 5. README | updates the version badge |
@@ -44,12 +44,28 @@ complete validation suite and refuses to continue when anything fails.
 | `--repo /path` | Repository to update (default: this repository) |
 | `--remote origin`, `--branch main` | Where to push |
 | `--skip-e2e` | Skip the Docker suite (not recommended; the release still needs typecheck/tests/build) |
+| `--sync-only` | Copy the source files into the repository and stop: no version bump, no changelog, no validation. Used by `scripts/tests/release.test.sh`. |
 | `--cleanup-e2e [dir]` | Remove what an interrupted E2E run left behind (containers, networks, temporary directories) and exit. With a data directory it targets that run exactly; without it, every `botpanel-e2e-*` directory under `$TMPDIR` is used |
 | `--allow-dirty` | Allow a dirty working tree |
 | `--no-push` | Commit and tag locally only |
 | `--bump-production` | Also write the version into the source installation |
 | `--yes` | Do not ask for confirmation |
 | `--dry-run` | Show what would be synced; change nothing |
+
+> **The synchronisation is verified, not assumed.** A release that reports success while nothing was
+> copied is the worst kind of failure — it happened once: `${DRY_RUN:+--dry-run …}` expands for `"0"`
+> as well (the string is non-empty), so every run rsynced in dry-run mode and published a version bump
+> with no source changes. The script now compares `DRY_RUN` and prints the number of copied files, and
+> the copy step is covered by `scripts/tests/release.test.sh`:
+>
+> ```bash
+> bash scripts/tests/release.test.sh
+> ```
+>
+> It builds a fake project and a throwaway git repository under `$TMPDIR` and asserts that a real run
+> copies new and changed files, deletes what the source dropped, leaves the version and the changelog
+> alone in `--sync-only` mode, and that `--dry-run` writes nothing. The working project and the real
+> repository are never touched.
 
 Recommended flow for a change:
 

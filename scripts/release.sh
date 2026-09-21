@@ -24,6 +24,7 @@ NOTES=""
 DRY_RUN=0
 NO_PUSH=0
 SKIP_E2E=0
+SYNC_ONLY=0
 ALLOW_DIRTY=0
 BUMP_PRODUCTION=0
 ASSUME_YES=0
@@ -207,6 +208,8 @@ Options:
   --remote <name>       Git remote to push to (default: origin)
   --branch <name>       Branch to push (default: the current branch)
   --skip-e2e            Do not run the Docker end-to-end suite (not recommended)
+  --sync-only           Copy the source files into the repository and exit, without
+                        bumping the version, touching the changelog or validating
   --cleanup-e2e [dir]   Remove the containers, networks and temporary directories left
                         behind by an interrupted E2E run, then exit. Pass the run data
                         directory for an exact match; without it, every botpanel-e2e-*
@@ -230,6 +233,7 @@ while [[ $# -gt 0 ]]; do
     --remote) REMOTE="${2:-}"; shift 2 ;;
     --branch) BRANCH="${2:-}"; shift 2 ;;
     --skip-e2e) SKIP_E2E=1; shift ;;
+    --sync-only) SYNC_ONLY=1; shift ;;
     --cleanup-e2e)
       CLEANUP_E2E=1
       shift
@@ -288,7 +292,7 @@ log "source:     ${SOURCE_DIR}"
 log "repository: ${REPO_DIR}"
 log "branch:     ${BRANCH} → ${REMOTE}"
 
-if [[ "${DRY_RUN}" -eq 0 ]] && ! git config user.email >/dev/null 2>&1; then
+if [[ "${DRY_RUN}" -eq 0 && "${SYNC_ONLY}" -eq 0 ]] && ! git config user.email >/dev/null 2>&1; then
   fail "no git identity in this repository. Configure one (locally) first:
     git config user.name \"Your Name\"
     git config user.email \"you@example.com\""
@@ -327,16 +331,24 @@ SYNC_FILES=(
 )
 
 step "Synchronising source files"
+# Whether rsync really copies or only reports must be decided by comparing the
+# variable: `DRY_RUN` is always set (0 or 1), and "0" is a *non-empty* string, so
+# `${DRY_RUN:+...}` used to expand on every run — the sync silently became a dry
+# run and releases shipped nothing but the version bump.
+RSYNC_FLAGS=(-a --delete --exclude 'node_modules' --exclude 'dist' --exclude '.DS_Store' --exclude '*.log')
+if [[ "${DRY_RUN}" -eq 1 ]]; then
+  RSYNC_FLAGS+=(--dry-run --itemize-changes)
+fi
+SYNCED_DIRS=0
+SYNCED_FILES=0
 for dir in "${SYNC_DIRS[@]}"; do
   if [[ ! -d "${SOURCE_DIR}/${dir}" ]]; then
     warn "missing in the source project, skipped: ${dir}"
     continue
   fi
   mkdir -p "${REPO_DIR}/${dir}"
-  rsync -a --delete \
-    --exclude 'node_modules' --exclude 'dist' --exclude '.DS_Store' --exclude '*.log' \
-    ${DRY_RUN:+--dry-run --itemize-changes} \
-    "${SOURCE_DIR}/${dir}/" "${REPO_DIR}/${dir}/"
+  rsync "${RSYNC_FLAGS[@]}" "${SOURCE_DIR}/${dir}/" "${REPO_DIR}/${dir}/"
+  SYNCED_DIRS=$((SYNCED_DIRS + 1))
 done
 for file in "${SYNC_FILES[@]}"; do
   if [[ ! -f "${SOURCE_DIR}/${file}" ]]; then
@@ -349,12 +361,23 @@ for file in "${SYNC_FILES[@]}"; do
     mkdir -p "$(dirname "${REPO_DIR}/${file}")"
     cp -p "${SOURCE_DIR}/${file}" "${REPO_DIR}/${file}"
   fi
+  SYNCED_FILES=$((SYNCED_FILES + 1))
 done
+log "${SYNCED_DIRS} director(ies) and ${SYNCED_FILES} file(s) copied from ${SOURCE_DIR}"
 
 if [[ "${DRY_RUN}" -eq 1 ]]; then
   echo
   log "Dry run: nothing else was executed."
   log "The version would become v${VERSION}, and the following files would change:"
+  git status --short || true
+  exit 0
+fi
+
+# Sync-only mode exists so the copy step can be exercised on its own (see
+# scripts/tests/release.test.sh): version, changelog and validation stay untouched.
+if [[ "${SYNC_ONLY}" -eq 1 ]]; then
+  echo
+  log "Sync only (--sync-only): version, changelog and validation were left untouched."
   git status --short || true
   exit 0
 fi
