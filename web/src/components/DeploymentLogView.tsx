@@ -64,7 +64,7 @@ export default function DeploymentLogView({
 
       <pre
         ref={containerRef}
-        className="terminal max-h-[45vh] overflow-auto rounded-lg border border-slate-800 bg-slate-950 p-3 whitespace-pre-wrap text-slate-300"
+        className="terminal max-h-[45vh] overflow-auto rounded-lg border border-white/8 bg-slate-950 p-3 whitespace-pre-wrap text-slate-300"
       >
         {deployment.log || "aguardando o início do deploy…"}
       </pre>

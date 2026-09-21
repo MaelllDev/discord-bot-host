@@ -11,6 +11,7 @@ import {
   InlineCode,
   Kpi,
   Meter,
+  PageHeader,
   SkeletonCard,
   Spinner,
 } from "../components/ui.tsx";
@@ -36,7 +37,7 @@ export default function SystemPage() {
   if (!system) {
     return (
       <div className="space-y-3">
-        <h1 className="text-xl font-semibold text-slate-100">Sistema</h1>
+        <PageHeader title="Sistema" icon={<IconServer className="h-4 w-4" />} />
         <Alert tone="red">{systemState.error ?? "Não foi possível ler as informações do sistema."}</Alert>
       </div>
     );
@@ -47,15 +48,16 @@ export default function SystemPage() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-100">Sistema</h1>
-          <p className="mt-1 text-xs text-slate-500">
-            Estado do Docker, recursos do host e configuração em uso pelo painel.
-          </p>
-        </div>
-        <Button onClick={() => void systemState.reload()}>Atualizar</Button>
-      </header>
+      <PageHeader
+        title="Sistema"
+        icon={<IconServer className="h-4 w-4" />}
+        subtitle="Estado do Docker, recursos do host e configuração em uso pelo painel."
+        actions={
+          <Button variant="outline" size="sm" onClick={() => void systemState.reload()}>
+            Atualizar
+          </Button>
+        }
+      />
 
       {!dockerOk ? (
         <Alert tone="red" icon={<IconAlert className="h-3.5 w-3.5" />}>
@@ -203,7 +205,7 @@ export default function SystemPage() {
           ) : (usageState.data?.usage.length ?? 0) === 0 ? (
             <EmptyState title="Nenhuma aplicação instalada" description="O uso em disco aparece aqui quando houver aplicações." />
           ) : (
-            <ul className="divide-y divide-slate-800/70 text-xs">
+            <ul className="divide-y divide-white/6 text-xs">
               {usageState.data?.usage
                 .slice()
                 .sort((a, b) => b.bytes - a.bytes)
@@ -219,7 +221,7 @@ export default function SystemPage() {
       </div>
 
       <Card title="Eventos do painel" subtitle="Últimos registros do sistema" bodyClassName="p-0">
-        <ul className="divide-y divide-slate-800/70">
+        <ul className="divide-y divide-white/6">
           {(eventsState.data?.events ?? []).map((event) => (
             <li key={event.id} className="flex items-start gap-3 px-4 py-2.5 text-xs">
               <span

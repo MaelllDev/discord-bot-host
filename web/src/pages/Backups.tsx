@@ -3,8 +3,8 @@ import { api } from "../api.ts";
 import { useAsync } from "../hooks.ts";
 import AppIcon from "../components/AppIcon.tsx";
 import BackupsPanel from "../components/panels/BackupsPanel.tsx";
-import { Alert, Button, EmptyState, SkeletonCard, StatusBadge } from "../components/ui.tsx";
-import { IconPlus } from "../components/icons.tsx";
+import { Alert, Button, EmptyState, PageHeader, SkeletonCard, StatusBadge } from "../components/ui.tsx";
+import { IconArchive, IconApps, IconPlus } from "../components/icons.tsx";
 import { runtimeLabel } from "../format.ts";
 
 /**
@@ -18,20 +18,18 @@ export default function Backups() {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-100">Backups</h1>
-          <p className="mt-1 text-xs text-slate-500">
-            Gere um ZIP do código de cada aplicação — e, se quiser, dos dados persistentes — e baixe ou exclua quando
-            precisar.
-          </p>
-        </div>
-        <Link to="/apps">
-          <Button variant="secondary">
-            <IconPlus className="h-4 w-4" /> Nova aplicação
-          </Button>
-        </Link>
-      </header>
+      <PageHeader
+        title="Backups"
+        icon={<IconArchive className="h-4 w-4" />}
+        subtitle="Gere um ZIP do código de cada aplicação — e, se quiser, dos dados persistentes — e baixe ou exclua quando precisar."
+        actions={
+          <Link to="/apps">
+            <Button variant="outline">
+              <IconApps className="h-4 w-4" /> Ver aplicações
+            </Button>
+          </Link>
+        }
+      />
 
       {appsState.error ? <Alert tone="red">{appsState.error}</Alert> : null}
 

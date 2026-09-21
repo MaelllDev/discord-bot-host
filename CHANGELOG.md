@@ -10,6 +10,17 @@ before being published, so there is no earlier version history to import.
 
 ## [Unreleased]
 
+## [1.0.2] - 2026-09-21
+
+### Added
+- Complete redesign of the web interface: a rebuilt design system (buttons, fields, badges, segmented tabs, toggles, modals, metric tiles, skeletons, toasts) over a near-black surface palette with a violet/indigo accent.
+- Fixed, collapsible sidebar with grouped navigation, an instance summary and a per-application status; sticky top bar showing the current page or application name, the Docker state and a shortcut to create an application.
+- Rebuilt Dashboard (welcome block, KPI tiles, host capacity, recent activity) and refreshed the applications list, application detail, new-application wizard, console framing, settings, system and backups pages.
+- Frontend render tests for the layout shell and the dashboard.
+
+### Fixed
+- The release workflow copied nothing: `${DRY_RUN:+--dry-run …}` expands for "0" as well, because that string is not empty, so every release ran rsync in dry-run mode and published a version bump with no source changes at all. The copy step now compares the variable, reports how many files it copied and is covered by scripts/tests/release.test.sh (a fake project plus a throwaway repository, also run in CI); --sync-only exercises the copy on its own.
+
 ## [1.0.1] - 2026-09-21
 
 ### Fixed
@@ -83,6 +94,7 @@ First public release.
 - Test suite: backend unit/integration tests, frontend render tests (jsdom) and a Docker
   end-to-end suite covering the full container lifecycle.
 
-[Unreleased]: https://github.com/MaelllDev/discord-bot-host/compare/v1.0.1...HEAD
+[Unreleased]: https://github.com/MaelllDev/discord-bot-host/compare/v1.0.2...HEAD
+[1.0.2]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.0.2
 [1.0.1]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.0.1
 [1.0.0]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.0.0

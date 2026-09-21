@@ -106,18 +106,18 @@ export default function BackupsPanel({ app, embedded = false }: { app: AppSummar
       {state.loading && state.data === null ? (
         <SkeletonRows rows={3} />
       ) : list.length === 0 ? (
-        <p className="rounded-xl border border-dashed border-white/10 px-4 py-6 text-center text-xs text-slate-500">
+        <p className="rounded-lg border border-dashed border-white/10 px-4 py-6 text-center text-xs text-slate-500">
           Nenhum backup ainda. Clique em <strong>Criar backup</strong> para gerar o primeiro.
         </p>
       ) : (
-        <ul className="divide-y divide-white/5 rounded-xl border border-white/5">
+        <ul className="divide-y divide-white/5 rounded-lg border border-white/5">
           {list.map((backup) => (
             <li key={backup.id} className="flex flex-wrap items-center gap-2 px-3 py-2.5 text-xs">
               <div className="min-w-0 flex-1">
                 <p className="flex flex-wrap items-center gap-2 text-slate-200">
                   <span className="truncate font-mono">{backup.fileName}</span>
                   {statusBadge(backup)}
-                  {backup.releaseSeq ? <Badge tone="sky">v{backup.releaseSeq}</Badge> : null}
+                  {backup.releaseSeq ? <Badge tone="indigo">v{backup.releaseSeq}</Badge> : null}
                   {backup.includeData ? <Badge>com /data</Badge> : <Badge>só código</Badge>}
                 </p>
                 <p className="mt-0.5 text-[11px] text-slate-500">
@@ -131,7 +131,7 @@ export default function BackupsPanel({ app, embedded = false }: { app: AppSummar
                 {backup.status === "success" ? (
                   <a
                     href={api.backupDownloadUrl(app.slug, backup.id)}
-                    className="inline-flex items-center gap-1.5 rounded-xl border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-medium text-slate-200 transition hover:border-white/20 hover:bg-white/10"
+                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-medium text-slate-200 transition hover:border-white/20 hover:bg-white/10"
                   >
                     <IconDownload className="h-3.5 w-3.5" /> Baixar
                   </a>

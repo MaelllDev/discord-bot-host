@@ -1,8 +1,17 @@
 import { api } from "../api.ts";
 import { useAsync } from "../hooks.ts";
 import { humanDuration } from "../format.ts";
-import { Alert, Badge, Button, Card, DescriptionList, InlineCode, SkeletonCard } from "../components/ui.tsx";
-import { IconAlert, IconLogout } from "../components/icons.tsx";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  DescriptionList,
+  InlineCode,
+  PageHeader,
+  SkeletonCard,
+} from "../components/ui.tsx";
+import { IconAlert, IconLogout, IconSettings } from "../components/icons.tsx";
 import { CREATOR, CreatorLinks, SupportLink } from "../components/Credits.tsx";
 import AiSettingsCard from "../components/AiSettingsCard.tsx";
 
@@ -29,7 +38,7 @@ export default function Settings({ onLogout }: { onLogout?: () => void }) {
   if (!system) {
     return (
       <div className="space-y-3">
-        <h1 className="text-xl font-semibold text-slate-100">Configurações</h1>
+        <PageHeader title="Configurações" icon={<IconSettings className="h-4 w-4" />} />
         <Alert tone="red">{systemState.error ?? "Não foi possível ler a configuração do painel."}</Alert>
       </div>
     );
@@ -114,12 +123,16 @@ export default function Settings({ onLogout }: { onLogout?: () => void }) {
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-xl font-semibold text-slate-100">Configurações</h1>
-        <p className="mt-1 text-xs text-slate-500">
-          Valores efetivos em execução. Esta página é <strong>somente leitura</strong>.
-        </p>
-      </header>
+      <PageHeader
+        title="Configurações"
+        icon={<IconSettings className="h-4 w-4" />}
+        subtitle="Valores efetivos em execução. Esta página é somente leitura."
+        actions={
+          <Button size="sm" variant="outline" onClick={() => void systemState.reload()}>
+            Atualizar
+          </Button>
+        }
+      />
 
       <Alert tone="amber" icon={<IconAlert className="h-3.5 w-3.5" />}>
         A API do painel expõe a configuração apenas para leitura (<InlineCode>GET /api/system</InlineCode>) — não existe
@@ -151,7 +164,7 @@ export default function Settings({ onLogout }: { onLogout?: () => void }) {
           </div>
         }
       >
-        <ul className="divide-y divide-slate-800/70">
+        <ul className="divide-y divide-white/6">
           {rows.map((row) => (
             <li key={row.variable} className="space-y-2 py-3.5 text-xs">
               <div className="flex flex-wrap items-center gap-2">
@@ -209,7 +222,7 @@ export default function Settings({ onLogout }: { onLogout?: () => void }) {
             alt=""
             width={56}
             height={56}
-            className="h-14 w-14 shrink-0 rounded-2xl border border-slate-700/60 bg-slate-950/40 object-contain p-1"
+            className="h-14 w-14 shrink-0 rounded-xl border border-white/10 bg-slate-950/60 object-contain p-1"
           />
           <div className="min-w-0 flex-1 space-y-3 text-xs leading-relaxed text-slate-300">
             <p>

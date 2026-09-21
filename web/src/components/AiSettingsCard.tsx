@@ -390,7 +390,7 @@ export default function AiSettingsCard() {
         ) : null}
 
         {showModels ? (
-          <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
+          <div className="rounded-lg border border-white/10 bg-slate-950/40 p-3">
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
               <span>
                 {isFromProvider ? "Modelos disponíveis na sua conta" : "Sugestões do painel"} — {modelOptions.length}{" "}

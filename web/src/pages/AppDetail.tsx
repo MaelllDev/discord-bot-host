@@ -3,7 +3,17 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { api } from "../api.ts";
 import { errorText, useAppStream, useAsync } from "../hooks.ts";
 import { humanCpu, humanDuration, humanRam, runtimeLabel } from "../format.ts";
-import { Alert, Badge, Button, Modal, SkeletonCard, Spinner, StatusBadge, Tabs } from "../components/ui.tsx";
+import {
+  Alert,
+  Badge,
+  Button,
+  Modal,
+  PageHeader,
+  SkeletonCard,
+  Spinner,
+  StatusBadge,
+  Tabs,
+} from "../components/ui.tsx";
 import AppIcon from "../components/AppIcon.tsx";
 import { IconPlay, IconRestart, IconStop, IconTrash, IconUpload } from "../components/icons.tsx";
 import ConfirmDialog from "../components/ConfirmDialog.tsx";
@@ -72,7 +82,7 @@ export default function AppDetail() {
   if (!app) {
     return (
       <div className="space-y-3">
-        <h1 className="text-xl font-semibold text-slate-100">Aplicação</h1>
+        <PageHeader title="Aplicação" />
         <Alert tone="red">{appState.error ?? "Aplicação não encontrada."}</Alert>
         <Link to="/apps">
           <Button>Voltar para as aplicações</Button>
@@ -128,46 +138,53 @@ export default function AppDetail() {
 
   return (
     <div className="space-y-5">
-      <header className="space-y-3">
-        <Link to="/apps" className="text-[11px] text-slate-500 hover:text-slate-300">
-          ← Aplicações
-        </Link>
+      <Link
+        to="/apps"
+        className="inline-flex items-center gap-1 text-[11px] text-slate-500 transition-colors hover:text-slate-300"
+      >
+        ← Aplicações
+      </Link>
 
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div className="flex min-w-0 items-start gap-4">
-            {/* O ícone é a identidade do bot: aparece grande, com um halo suave,
-                e é o mesmo usado na sidebar, na lista e nos cards. */}
-            <span className="relative shrink-0">
-              <span className="absolute -inset-1 rounded-3xl bg-gradient-to-br from-indigo-500/30 via-violet-500/20 to-transparent blur-md" />
-              <AppIcon app={app} size="lg" className="relative ring-1 ring-white/10" />
-            </span>
-            <div className="min-w-0">
-            <h1 className="flex flex-wrap items-center gap-2 text-xl font-semibold text-slate-100">
-              {app.name}
-              <StatusBadge status={liveStatus} />
-            </h1>
-            <p className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-              <span className="font-mono">{app.slug}</span>
-              <span>·</span>
-              <span className="font-mono">{app.image}</span>
-              {app.activeRelease > 0 ? (
-                <>
-                  <span>·</span>
-                  <Badge tone="sky">versão {app.activeRelease}</Badge>
-                </>
-              ) : (
-                <Badge tone="amber">nenhuma versão publicada</Badge>
-              )}
-              {live && resources && resources.uptimeSeconds > 0 ? (
-                <Badge>no ar há {humanDuration(resources.uptimeSeconds)}</Badge>
-              ) : null}
-            </p>
+      {/* Cartão de identidade: ícone grande, nome, estado e as ações da aplicação. */}
+      <section className="card relative overflow-hidden p-5">
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-16 -top-24 h-56 w-56 rounded-full bg-indigo-500/12 blur-3xl"
+        />
+        <div className="relative flex flex-wrap items-center justify-between gap-4">
+          <div className="flex min-w-0 items-center gap-4">
+            <AppIcon
+              app={app}
+              size="lg"
+              className="ring-1 ring-indigo-400/20 shadow-[0_0_30px_-14px_rgb(124_92_255/0.8)]"
+            />
+            <div className="min-w-0 space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <h1 className="truncate text-xl font-semibold tracking-tight text-slate-50">{app.name}</h1>
+                <StatusBadge status={liveStatus} />
+              </div>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <Badge>
+                  <span className="font-mono">{app.slug}</span>
+                </Badge>
+                <Badge>
+                  <span className="font-mono">{app.image}</span>
+                </Badge>
+                {app.activeRelease > 0 ? (
+                  <Badge tone="indigo">versão {app.activeRelease}</Badge>
+                ) : (
+                  <Badge tone="amber">nenhuma versão publicada</Badge>
+                )}
+                {live && resources && resources.uptimeSeconds > 0 ? (
+                  <Badge tone="green">no ar há {humanDuration(resources.uptimeSeconds)}</Badge>
+                ) : null}
+              </div>
             </div>
           </div>
 
           <div className="flex flex-wrap gap-2">
             {live ? (
-              <Button variant="secondary" loading={busy === "stop"} onClick={() => void run("stop")}>
+              <Button variant="outline" loading={busy === "stop"} onClick={() => void run("stop")}>
                 <IconStop className="h-3.5 w-3.5" /> Parar
               </Button>
             ) : (
@@ -186,15 +203,15 @@ export default function AppDetail() {
             </Button>
           </div>
         </div>
+      </section>
 
-        {error ? <Alert tone="red">{error}</Alert> : null}
-        {app.activeRelease === 0 ? (
-          <Alert tone="amber">
-            Nenhuma versão publicada ainda. Use <strong>Atualizar código</strong> para enviar o ZIP — o container só é
-            criado depois do primeiro release.
-          </Alert>
-        ) : null}
-      </header>
+      {error ? <Alert tone="red">{error}</Alert> : null}
+      {app.activeRelease === 0 ? (
+        <Alert tone="amber">
+          Nenhuma versão publicada ainda. Use <strong>Atualizar código</strong> para enviar o ZIP — o container só é
+          criado depois do primeiro release.
+        </Alert>
+      ) : null}
 
       <div className="flex flex-wrap items-center gap-3">
         <Tabs<Tab>

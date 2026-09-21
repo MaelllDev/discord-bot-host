@@ -113,7 +113,7 @@ export default function UpdateCodeDialog({
     >
       <div className="space-y-4 text-xs text-slate-300">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge tone="sky">versão atual: {app.activeRelease > 0 ? `v${app.activeRelease}` : "nenhuma"}</Badge>
+          <Badge tone="indigo">versão atual: {app.activeRelease > 0 ? `v${app.activeRelease}` : "nenhuma"}</Badge>
           <Badge tone="indigo">
             próxima versão: {releaseSeq !== null ? `v${releaseSeq}` : `v${app.activeRelease + 1}`}
           </Badge>
@@ -134,7 +134,7 @@ export default function UpdateCodeDialog({
         />
 
         {stage === "select" ? (
-          <div className="rounded-xl border-2 border-dashed border-slate-800 px-6 py-8 text-center">
+          <div className="rounded-lg border-2 border-dashed border-white/8 px-6 py-8 text-center">
             <IconUpload className="mx-auto h-6 w-6 text-slate-500" />
             <p className="mt-2 text-sm text-slate-300">Selecione o ZIP com a nova versão do código</p>
             <p className="mt-1 text-[11px] text-slate-500">
@@ -158,7 +158,7 @@ export default function UpdateCodeDialog({
         ) : null}
 
         {stage !== "select" && stage !== "uploading" && detection ? (
-          <div className="space-y-2 rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+          <div className="space-y-2 rounded-lg border border-white/8 bg-slate-950/60 p-3">
             <div className="flex flex-wrap items-center gap-2">
               <Badge tone="green">
                 <IconCheck className="h-3 w-3" /> {fileName}

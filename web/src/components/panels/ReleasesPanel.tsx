@@ -112,7 +112,7 @@ export default function ReleasesPanel({
             Nenhuma versão publicada. Use <strong>Atualizar código</strong> para enviar o primeiro ZIP.
           </p>
         ) : (
-          <ul className="divide-y divide-slate-800/70">
+          <ul className="divide-y divide-white/6">
             {sorted.map((release) => {
               const isActive = release.seq === activeRelease;
               return (
@@ -198,7 +198,7 @@ export default function ReleasesPanel({
             <Spinner /> carregando…
           </div>
         ) : (
-          <ul className="divide-y divide-slate-800/70 text-xs">
+          <ul className="divide-y divide-white/6 text-xs">
             {(deploymentsState.data?.deployments ?? []).map((deployment) => (
               <li key={deployment.id} className="flex flex-wrap items-center gap-2 px-4 py-2.5">
                 <span className="text-slate-300">

@@ -60,7 +60,7 @@ export default function AppCard({ app, onChanged }: { app: AppSummary; onChanged
         <Badge tone="indigo">{runtimeLabel(app.runtime)}</Badge>
         <Badge>{humanCpu(app.cpu)}</Badge>
         <Badge>{humanRam(app.memoryMb)}</Badge>
-        {app.activeRelease > 0 ? <Badge tone="sky">v{app.activeRelease}</Badge> : <Badge tone="amber">sem versão</Badge>}
+        {app.activeRelease > 0 ? <Badge tone="indigo">v{app.activeRelease}</Badge> : <Badge tone="amber">sem versão</Badge>}
         {live && resources ? <Badge>up {humanDuration(resources.uptimeSeconds)}</Badge> : null}
         {app.status === "unknown" ? <Badge tone="red">Docker inacessível</Badge> : null}
       </div>

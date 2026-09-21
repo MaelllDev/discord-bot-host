@@ -1,7 +1,50 @@
 @import "tailwindcss";
 
+/*
+ * Identidade visual do painel.
+ *
+ * As escalas `slate` (superfícies neutras quase pretas), `indigo`/`violet`
+ * (destaque roxo-indigo) e os raios são redefinidas aqui de propósito: todas as
+ * telas usam esses tokens, então o tema inteiro acompanha de uma vez.
+ */
 @theme {
   --font-mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+
+  /* Superfícies: fundo quase preto, cartões um degrau acima, bordas outro. */
+  --color-slate-50: #f5f7f9;
+  --color-slate-100: #e7ebf0;
+  --color-slate-200: #cbd3dc;
+  --color-slate-300: #b2bcc8;
+  --color-slate-400: #939fae;
+  --color-slate-500: #7d8a99;
+  --color-slate-600: #4b5563;
+  --color-slate-700: #262c34;
+  --color-slate-800: #1b2027;
+  --color-slate-900: #0e1116;
+  --color-slate-950: #070a0d;
+
+  /* Destaque: roxo puxado para o indigo. */
+  --color-indigo-100: #ece8ff;
+  --color-indigo-200: #d6ceff;
+  --color-indigo-300: #b9abff;
+  --color-indigo-400: #9c87ff;
+  --color-indigo-500: #7c5cff;
+  --color-indigo-600: #6a45f2;
+  --color-indigo-700: #5a37d8;
+  --color-indigo-800: #3b2bb8;
+  --color-indigo-900: #2b2088;
+  --color-indigo-950: #1b1550;
+
+  --color-violet-300: #cfb2ff;
+  --color-violet-400: #b98cff;
+  --color-violet-500: #9a5cff;
+  --color-violet-600: #8433f0;
+
+  /* Raios: botões e campos de 8px, cartões de 12px, blocos de destaque de 18px. */
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 18px;
 }
 
 @layer base {
@@ -13,21 +56,34 @@
 
   body {
     @apply bg-slate-950 text-slate-200 antialiased;
-    /* Brilhos suaves no fundo: dão profundidade sem competir com o conteúdo. */
+    /* Grade discreta + dois brilhos de destaque: profundidade sem competir
+       com o conteúdo (os cartões são opacos e cobrem a grade). */
     background-image:
-      radial-gradient(900px 520px at 10% -12%, rgb(99 102 241 / 0.18), transparent 62%),
-      radial-gradient(760px 420px at 100% -4%, rgb(139 92 246 / 0.14), transparent 58%),
-      radial-gradient(820px 520px at 50% 118%, rgb(45 212 191 / 0.07), transparent 62%);
+      linear-gradient(to right, rgb(255 255 255 / 0.024) 1px, transparent 1px),
+      linear-gradient(to bottom, rgb(255 255 255 / 0.024) 1px, transparent 1px),
+      radial-gradient(820px 460px at 8% -16%, rgb(124 92 255 / 0.11), transparent 62%),
+      radial-gradient(720px 420px at 98% -10%, rgb(154 92 255 / 0.08), transparent 64%);
+    background-size:
+      32px 32px,
+      32px 32px,
+      auto,
+      auto;
     background-attachment: fixed;
   }
 
+  h1,
+  h2,
+  h3 {
+    letter-spacing: -0.011em;
+  }
+
   ::selection {
-    @apply bg-indigo-500/30 text-white;
+    @apply bg-indigo-500/35 text-white;
   }
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: rgb(71 85 105) transparent;
+    scrollbar-color: rgb(75 85 99) transparent;
   }
 
   ::-webkit-scrollbar {
@@ -36,11 +92,11 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply rounded-full bg-slate-600/70;
+    @apply rounded-full bg-slate-700;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-slate-500/80;
+    @apply bg-slate-600;
   }
 
   ::-webkit-scrollbar-track {
@@ -56,20 +112,60 @@
 }
 
 @layer utilities {
+  /* Superfície padrão de conteúdo. */
   .card {
-    @apply rounded-2xl border border-white/10 bg-slate-900/50 backdrop-blur-xl;
+    @apply rounded-lg border border-white/10 bg-slate-900;
     box-shadow:
-      inset 0 1px 0 0 rgb(255 255 255 / 0.04),
-      0 24px 48px -34px rgb(0 0 0 / 0.9);
+      inset 0 1px 0 0 rgb(255 255 255 / 0.03),
+      0 20px 40px -34px rgb(0 0 0 / 0.95);
   }
 
-  /* Cartões que são clicáveis/acionáveis ganham um realce discreto. */
-  .card-interactive {
-    @apply transition duration-200 hover:border-indigo-400/30 hover:bg-slate-900/70;
+  /* Cartões clicáveis: realce discreto no hover, como nos tiles de recurso. */
+  .card-interactive,
+  .card-hover {
+    @apply transition-colors duration-200 hover:border-indigo-400/30 hover:bg-slate-800/40;
+  }
+
+  /* Bloco de destaque (onboarding / boas-vindas). */
+  .hero-card {
+    @apply relative overflow-hidden rounded-xl border border-indigo-400/20;
+    background-image: linear-gradient(
+      135deg,
+      color-mix(in oklab, var(--color-indigo-500) 14%, transparent) 0%,
+      var(--color-slate-900) 58%,
+      var(--color-slate-900) 100%
+    );
+  }
+
+  /* Bloco quadrado de ícone usado em KPIs, cabeçalhos de cartão e ações. */
+  .icon-tile {
+    @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-indigo-400/20 bg-indigo-500/10 text-indigo-300;
+  }
+
+  /* Variantes de tamanho ficam declaradas DEPOIS de .icon-tile: assim a
+     precedência não depende da ordem em que o Tailwind emite as utilitárias. */
+  .icon-tile-sm {
+    @apply h-8 w-8;
+  }
+
+  .icon-tile-md {
+    @apply h-10 w-10;
+  }
+
+  .icon-tile-lg {
+    @apply h-11 w-11;
+  }
+
+  .icon-tile-neutral {
+    @apply border-white/10 bg-white/[0.04] text-slate-300;
   }
 
   .terminal {
-    @apply font-mono text-[12.5px] leading-[1.55];
+    @apply font-mono text-[12.5px] leading-[1.6];
+  }
+
+  .skeleton {
+    @apply animate-pulse rounded-md bg-white/[0.06];
   }
 
   .fade-in {

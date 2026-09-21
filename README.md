@@ -9,7 +9,7 @@ It is designed for **one administrator hosting their own projects** (Discord bot
 APIs). It is *not* a multi-tenant hosting business: there are no plans, no customers, no per-user
 permissions.
 
-![Version](https://img.shields.io/badge/version-1.0.1-6366f1)
+![Version](https://img.shields.io/badge/version-1.0.2-6366f1)
 ![License](https://img.shields.io/badge/license-MIT-8b5cf6)
 ![Node](https://img.shields.io/badge/node-%3E%3D22-3c873a)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%2B%20Docker-0db7ed)

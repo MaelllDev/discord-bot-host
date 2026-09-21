@@ -8,8 +8,22 @@ import EnvEditor from "../components/EnvEditor.tsx";
 import AppIcon from "../components/AppIcon.tsx";
 import DeployProgress from "../components/DeployProgress.tsx";
 import { useToast } from "../components/Toasts.tsx";
-import { Alert, Badge, Button, Card, Field, InlineCode, Input, ProgressBar, Select, Spinner, Toggle, cn } from "../components/ui.tsx";
-import { IconCheck, IconUpload } from "../components/icons.tsx";
+import {
+  Alert,
+  Badge,
+  Button,
+  Card,
+  Field,
+  InlineCode,
+  Input,
+  PageHeader,
+  ProgressBar,
+  Select,
+  Spinner,
+  Toggle,
+  cn,
+} from "../components/ui.tsx";
+import { IconCheck, IconPlus, IconUpload } from "../components/icons.tsx";
 
 interface RuntimePreset {
   label: string;
@@ -178,41 +192,60 @@ export default function NewApp() {
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-100">Nova aplicação</h1>
-          <p className="mt-1 text-xs text-slate-500">
-            Envie o ZIP do projeto, confirme como ele deve rodar e o painel cria o container, instala as dependências e
-            publica a primeira versão.
-          </p>
-        </div>
-        <Link to="/apps">
-          <Button variant="ghost" disabled={creating}>
-            Cancelar
-          </Button>
-        </Link>
-      </header>
+      <PageHeader
+        title="Nova aplicação"
+        icon={<IconPlus className="h-4 w-4" />}
+        subtitle="Envie o ZIP do projeto, confirme como ele deve rodar e o painel cria o container, instala as dependências e publica a primeira versão."
+        actions={
+          <Link to="/apps">
+            <Button variant="ghost" disabled={creating}>
+              Cancelar
+            </Button>
+          </Link>
+        }
+      />
 
-      <ol className="flex flex-wrap gap-2">
-        {STEPS.map((label, index) => (
-          <li key={label}>
-            <button
-              type="button"
-              onClick={() => (index <= step && !creating ? setStep(index) : undefined)}
-              className={cn(
-                "flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs transition",
-                index === step
-                  ? "border-indigo-700 bg-indigo-950/60 text-indigo-200"
-                  : index < step
-                    ? "border-slate-700 bg-slate-900 text-slate-300"
-                    : "border-slate-800 text-slate-500",
-              )}
-            >
-              {index < step ? <IconCheck className="h-3 w-3" /> : <span className="font-mono">{index + 1}</span>}
-              {label}
-            </button>
-          </li>
-        ))}
+      {/* Passos do assistente, com o progresso visível a cada etapa. */}
+      <ol className="card flex flex-wrap items-center gap-1 p-2">
+        {STEPS.map((label, index) => {
+          const done = index < step;
+          const current = index === step;
+          return (
+            <li key={label} className="flex items-center gap-1">
+              {index > 0 ? (
+                <span
+                  aria-hidden="true"
+                  className={cn("hidden h-px w-5 sm:block", done || current ? "bg-indigo-500/40" : "bg-white/10")}
+                />
+              ) : null}
+              <button
+                type="button"
+                onClick={() => (index <= step && !creating ? setStep(index) : undefined)}
+                disabled={index > step || creating}
+                className={cn(
+                  "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
+                  current && "bg-indigo-500/15 text-indigo-100 shadow-[inset_0_0_0_1px_rgb(124_92_255/0.3)]",
+                  done && "text-slate-300 hover:bg-white/[0.06]",
+                  !done && !current && "text-slate-500",
+                )}
+              >
+                <span
+                  className={cn(
+                    "flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold tabular-nums",
+                    done
+                      ? "bg-emerald-500/15 text-emerald-300"
+                      : current
+                        ? "bg-indigo-500 text-white"
+                        : "bg-white/[0.06] text-slate-400",
+                  )}
+                >
+                  {done ? <IconCheck className="h-3 w-3" /> : index + 1}
+                </span>
+                {label}
+              </button>
+            </li>
+          );
+        })}
       </ol>
 
       {step === 0 ? (
@@ -269,8 +302,8 @@ export default function NewApp() {
                 if (file) void handleFile(file);
               }}
               className={cn(
-                "rounded-xl border-2 border-dashed px-6 py-8 text-center transition",
-                dragging ? "border-indigo-500 bg-indigo-950/30" : "border-slate-800",
+                "rounded-lg border-2 border-dashed px-6 py-10 text-center transition-colors duration-200",
+                dragging ? "border-indigo-400/60 bg-indigo-500/8" : "border-white/12 hover:border-white/20",
               )}
             >
               {uploading ? (
@@ -283,8 +316,10 @@ export default function NewApp() {
                 </div>
               ) : (
                 <>
-                  <IconUpload className="mx-auto h-6 w-6 text-slate-500" />
-                  <p className="mt-2 text-sm text-slate-300">Arraste o arquivo .zip aqui</p>
+                  <span className="icon-tile icon-tile-lg mx-auto">
+                    <IconUpload className="h-5 w-5" />
+                  </span>
+                  <p className="mt-3 text-sm font-medium text-slate-200">Arraste o arquivo .zip aqui</p>
                   <p className="mt-1 text-xs text-slate-500">ou</p>
                   <Button className="mt-2" onClick={() => fileInputRef.current?.click()}>
                     Escolher arquivo
@@ -299,7 +334,7 @@ export default function NewApp() {
             {uploadError ? <Alert tone="red">{uploadError}</Alert> : null}
 
             {upload && detection ? (
-              <div className="space-y-3 rounded-lg border border-slate-800 bg-slate-950/60 p-3">
+              <div className="space-y-3 rounded-lg border border-white/10 bg-slate-950/60 p-3.5">
                 <div className="flex flex-wrap items-center gap-2 text-xs">
                   <Badge tone="green">
                     <IconCheck className="h-3 w-3" /> {upload.upload.fileName}
@@ -610,7 +645,7 @@ export default function NewApp() {
               ) : null
             }
           />
-          <pre className="terminal mt-3 max-h-64 overflow-auto rounded-lg border border-slate-800 bg-slate-950 p-3 whitespace-pre-wrap text-slate-300">
+          <pre className="terminal mt-3 max-h-64 overflow-auto rounded-lg border border-white/8 bg-slate-950 p-3 whitespace-pre-wrap text-slate-300">
             {deploy.log || "aguardando o início do deploy…"}
           </pre>
           {deploy.finished ? (

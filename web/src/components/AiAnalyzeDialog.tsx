@@ -124,7 +124,7 @@ function AnalysisResult({ analysis, onCopy }: { analysis: AiAnalysis; onCopy: (t
       </div>
 
       {analysis.status === "running" ? (
-        <div className="flex items-center gap-2 rounded-xl border border-white/10 bg-slate-950/60 px-3 py-6 text-xs text-slate-400">
+        <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-slate-950/60 px-3 py-6 text-xs text-slate-400">
           <Spinner className="h-4 w-4" /> consultando o modelo… isso pode levar alguns segundos.
         </div>
       ) : analysis.status === "failed" ? (
@@ -132,12 +132,12 @@ function AnalysisResult({ analysis, onCopy }: { analysis: AiAnalysis; onCopy: (t
           {analysis.error || "A análise falhou."}
         </Alert>
       ) : (
-        <div className="rounded-xl border border-white/10 bg-slate-950/40 p-3">
+        <div className="rounded-lg border border-white/10 bg-slate-950/40 p-3">
           <AnalysisText text={analysis.result} />
         </div>
       )}
 
-      <div className="rounded-xl border border-white/10 bg-slate-950/40 px-3 py-2">
+      <div className="rounded-lg border border-white/10 bg-slate-950/40 px-3 py-2">
         <button
           type="button"
           className="text-[11px] text-slate-400 transition hover:text-slate-200"
@@ -329,7 +329,7 @@ export default function AiAnalyzeDialog({
         </div>
 
         {current ? (
-          <div className="rounded-xl border border-white/10 bg-slate-900/40 p-3">
+          <div className="rounded-lg border border-white/10 bg-slate-900/40 p-3">
             <AnalysisResult analysis={current} onCopy={(text) => void copy(text)} />
           </div>
         ) : null}
@@ -337,7 +337,7 @@ export default function AiAnalyzeDialog({
         {history.length > 1 ? (
           <div className="space-y-2">
             <p className="text-xs font-medium text-slate-300">Análises anteriores</p>
-            <ul className="divide-y divide-white/5 rounded-xl border border-white/5">
+            <ul className="divide-y divide-white/5 rounded-lg border border-white/5">
               {history
                 .filter((item) => item.id !== current?.id)
                 .map((item) => (

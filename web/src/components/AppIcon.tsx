@@ -5,10 +5,10 @@ import { runtimeLabel } from "../format.ts";
 type IconSize = "sm" | "md" | "lg" | "xl";
 
 const SIZES: Record<IconSize, string> = {
-  sm: "h-8 w-8 rounded-lg text-[11px]",
-  md: "h-10 w-10 rounded-xl text-sm",
-  lg: "h-14 w-14 rounded-2xl text-lg",
-  xl: "h-20 w-20 rounded-3xl text-2xl",
+  sm: "h-8 w-8 rounded-md text-[11px]",
+  md: "h-10 w-10 rounded-lg text-sm",
+  lg: "h-14 w-14 rounded-xl text-lg",
+  xl: "h-20 w-20 rounded-2xl text-2xl",
 };
 
 /**
@@ -57,7 +57,7 @@ export default function AppIcon({
     <span
       title={runtimeLabel(app.runtime)}
       className={cn(
-        "flex shrink-0 items-center justify-center border border-white/10 bg-gradient-to-br from-indigo-500/30 via-violet-500/15 to-transparent font-semibold text-indigo-100",
+        "flex shrink-0 items-center justify-center border border-indigo-400/20 bg-gradient-to-br from-indigo-500/25 to-violet-500/10 font-semibold text-indigo-100",
         SIZES[size],
         className,
       )}

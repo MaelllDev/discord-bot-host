@@ -23,7 +23,7 @@ function Marker({ state, failed }: { state: "done" | "active" | "pending"; faile
       </span>
     );
   }
-  return <span className="h-4 w-4 rounded-full border border-slate-700" />;
+  return <span className="h-4 w-4 rounded-full border border-white/10" />;
 }
 
 /**

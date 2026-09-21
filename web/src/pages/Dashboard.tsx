@@ -10,8 +10,12 @@ import {
   Button,
   Card,
   EmptyState,
+  FeatureTile,
+  Hero,
   Kpi,
   Meter,
+  PageHeader,
+  SectionHeader,
   SkeletonCard,
   Spinner,
   cn,
@@ -20,10 +24,14 @@ import {
   IconActivity,
   IconAlert,
   IconApps,
+  IconArchive,
   IconCpu,
   IconDisk,
+  IconLayers,
   IconMemory,
   IconPlus,
+  IconServer,
+  IconSparkles,
 } from "../components/icons.tsx";
 
 export default function Dashboard() {
@@ -60,55 +68,126 @@ export default function Dashboard() {
 
   return (
     <div className="space-y-6">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-100">Dashboard</h1>
-          <p className="mt-1 text-xs text-slate-500">
-            {system
-              ? `${system.apps.total} aplicação(ões) · Docker ${system.docker.version ?? "?"} · host ${system.host.platform}`
-              : "carregando informações do sistema…"}
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {lastSync ? (
-            <span className="hidden text-[11px] text-slate-500 sm:inline">sincronizado {relativeTime(lastSync)}</span>
-          ) : null}
-          <Link to="/apps/new">
-            <Button variant="primary">
-              <IconPlus className="h-4 w-4" /> Nova aplicação
+      <PageHeader
+        title="Dashboard"
+        subtitle={
+          system
+            ? `${system.apps.total} aplicação(ões) · Docker ${system.docker.version ?? "?"} · host ${system.host.platform}`
+            : "carregando informações do sistema…"
+        }
+        icon={<IconActivity className="h-4 w-4" />}
+        actions={
+          <>
+            {lastSync ? (
+              <span className="hidden text-[11px] text-slate-500 sm:inline">sincronizado {relativeTime(lastSync)}</span>
+            ) : null}
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                void appsState.reload();
+                void systemState.reload();
+              }}
+            >
+              Atualizar
             </Button>
-          </Link>
-        </div>
-      </header>
+          </>
+        }
+      />
 
       {!dockerOk ? (
         <Alert tone="red" icon={<IconAlert className="h-3.5 w-3.5" />}>
           O Docker não está acessível. O estado real das aplicações é <strong>desconhecido</strong> — o painel não
-          consegue falar com <code>{system?.config.dockerSocket ?? "/var/run/docker.sock"}</code>. Use <code>systemctl status docker</code> na
-          VPS. Os botões de controle ficam indisponíveis até o daemon voltar.
+          consegue falar com <code>{system?.config.dockerSocket ?? "/var/run/docker.sock"}</code>. Use{" "}
+          <code>systemctl status docker</code> na VPS. Os botões de controle ficam indisponíveis até o daemon voltar.
         </Alert>
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <Kpi label="Aplicações" value={apps.length} hint={`${system?.apps.total ?? apps.length} registradas`} icon={<IconApps className="h-3.5 w-3.5" />} />
+        <Kpi
+          label="Aplicações"
+          value={apps.length}
+          hint={`${system?.apps.total ?? apps.length} registradas`}
+          icon={<IconApps className="h-4 w-4" />}
+          tone="neutral"
+        />
         <Kpi
           label="Online"
-          value={<span className="text-emerald-300">{online}</span>}
+          value={online}
           hint="em execução ou subindo"
-          icon={<IconActivity className="h-3.5 w-3.5" />}
+          icon={<IconActivity className="h-4 w-4" />}
+          tone="green"
         />
-        <Kpi label="Paradas" value={stopped} hint="paradas manualmente ou encerradas" icon={<IconAlert className="h-3.5 w-3.5" />} />
+        <Kpi
+          label="Paradas"
+          value={stopped}
+          hint="paradas manualmente ou encerradas"
+          icon={<IconAlert className="h-4 w-4" />}
+          tone="amber"
+        />
         <Kpi
           label="Desconhecidas"
-          value={<span className={unknown > 0 ? "text-rose-300" : undefined}>{unknown}</span>}
+          value={unknown}
           hint={unknown > 0 ? "Docker inacessível: estado real desconhecido" : "nenhuma"}
-          icon={<IconAlert className="h-3.5 w-3.5" />}
+          icon={<IconAlert className="h-4 w-4" />}
+          tone={unknown > 0 ? "red" : "neutral"}
         />
       </div>
 
+      {!loading && apps.length === 0 ? (
+        <Hero
+          badge="Primeiros passos"
+          title="Hospede seus bots e aplicações nesta VPS"
+          description="Envie um ZIP com o código, confirme o runtime detectado e o painel cuida do resto: dependências, container isolado, limites de CPU e RAM, logs ao vivo, versões com rollback e backups."
+          actions={
+            <>
+              <Link to="/apps/new">
+                <Button variant="primary">
+                  <IconPlus className="h-4 w-4" /> Criar aplicação
+                </Button>
+              </Link>
+              <Link to="/system">
+                <Button variant="outline">
+                  <IconServer className="h-4 w-4" /> Ver o sistema
+                </Button>
+              </Link>
+            </>
+          }
+          footnote="Tudo roda na sua própria VPS — nenhum serviço externo é necessário."
+        >
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            <FeatureTile
+              title="Deploy por ZIP"
+              description="Upload do projeto inteiro, com progresso e detecção automática do runtime."
+              icon={<IconLayers className="h-4 w-4" />}
+            />
+            <FeatureTile
+              title="Container isolado"
+              description="Cada aplicação em seu próprio container, com limites de CPU, RAM e processos."
+              icon={<IconApps className="h-4 w-4" />}
+            />
+            <FeatureTile
+              title="Versões e rollback"
+              description="Releases imutáveis: volte para a versão anterior sem perder os dados de /data."
+              icon={<IconArchive className="h-4 w-4" />}
+            />
+            <FeatureTile
+              title="IA nos logs"
+              description="Análise opcional das últimas linhas com o provedor de IA que você configurar."
+              icon={<IconSparkles className="h-4 w-4" />}
+            />
+          </div>
+        </Hero>
+      ) : null}
+
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card title="Uso das aplicações" subtitle="Somatório do consumo real reportado pelos containers" className="lg:col-span-2">
-          <div className="grid gap-4 sm:grid-cols-2">
+        <Card
+          title="Uso das aplicações"
+          subtitle="Somatório do consumo real reportado pelos containers"
+          icon={<IconCpu className="h-4 w-4" />}
+          className="lg:col-span-2"
+        >
+          <div className="grid gap-5 sm:grid-cols-2">
             <Meter
               label="CPU em uso"
               value={dockerOk ? `${cpuInUse.toFixed(1)}%` : "indisponível"}
@@ -123,21 +202,18 @@ export default function Dashboard() {
             <Meter
               label="Memória em uso"
               value={dockerOk ? humanBytes(memoryInUse) : "indisponível"}
-              hint={
-                hostMemory !== null
-                  ? `de ${humanBytes(hostMemory)} na VPS`
-                  : undefined
-              }
+              hint={hostMemory !== null ? `de ${humanBytes(hostMemory)} na VPS` : undefined}
               percent={hostMemory ? Math.min(100, (memoryInUse / hostMemory) * 100) : 0}
               tone="green"
             />
           </div>
-          <div className="mt-4 flex flex-wrap gap-2 text-[11px] text-slate-500">
+          <div className="mt-5 flex flex-wrap gap-2 text-[11px] text-slate-500">
             <Badge tone="indigo">
               <IconCpu className="h-3 w-3" /> {humanCpu(apps.reduce((total, app) => total + app.cpu, 0))} alocados
             </Badge>
             <Badge tone="indigo">
-              <IconMemory className="h-3 w-3" /> {humanRam(apps.reduce((total, app) => total + app.memoryMb, 0))} alocados
+              <IconMemory className="h-3 w-3" /> {humanRam(apps.reduce((total, app) => total + app.memoryMb, 0))}{" "}
+              alocados
             </Badge>
             {system?.host.disk ? (
               <Badge>
@@ -148,9 +224,9 @@ export default function Dashboard() {
           </div>
         </Card>
 
-        <Card title="Capacidade da VPS" subtitle="Recursos do host que executa o painel">
+        <Card title="Capacidade da VPS" subtitle="Recursos do host que executa o painel" icon={<IconServer className="h-4 w-4" />}>
           {system ? (
-            <div className="space-y-4">
+            <div className="space-y-5">
               <Meter
                 label="CPU"
                 value={`${system.host.cpuCount} núcleo(s)`}
@@ -160,8 +236,10 @@ export default function Dashboard() {
               />
               <Meter
                 label="Memória"
-                value={hostMemoryUsed !== null ? `${humanBytes(hostMemoryUsed)} de ${humanBytes(hostMemory)}` : "—"}
-                percent={hostMemory ? (hostMemoryUsed ?? 0) / hostMemory * 100 : 0}
+                value={
+                  hostMemoryUsed !== null ? `${humanBytes(hostMemoryUsed)} de ${humanBytes(hostMemory)}` : "—"
+                }
+                percent={hostMemory ? ((hostMemoryUsed ?? 0) / hostMemory) * 100 : 0}
                 tone={hostMemory && (hostMemoryUsed ?? 0) / hostMemory > 0.85 ? "red" : "green"}
               />
               {system.host.disk ? (
@@ -191,12 +269,15 @@ export default function Dashboard() {
       {appsState.error ? <Alert tone="red">{appsState.error}</Alert> : null}
 
       <section className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-semibold text-slate-100">Aplicações</h2>
-          <Link to="/apps" className="text-[11px] text-indigo-300 hover:text-indigo-200">
-            ver todas
-          </Link>
-        </div>
+        <SectionHeader
+          title="Aplicações"
+          hint={apps.length > 0 ? `${apps.length} hospedada(s) nesta instância` : undefined}
+          action={
+            <Link to="/apps" className="text-[11px] font-medium text-indigo-300 transition-colors hover:text-indigo-200">
+              ver todas →
+            </Link>
+          }
+        />
 
         {loading ? (
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -229,10 +310,10 @@ export default function Dashboard() {
         ) : null}
       </section>
 
-      <Card title="Atividade recente" subtitle="Eventos registrados pelo painel" bodyClassName="p-0">
-        <ul className="divide-y divide-slate-800/70">
+      <Card title="Atividade recente" subtitle="Eventos registrados pelo painel" bodyClassName="p-0" icon={<IconActivity className="h-4 w-4" />}>
+        <ul className="divide-y divide-white/6">
           {(eventsState.data?.events ?? []).map((event) => (
-            <li key={event.id} className="flex items-start gap-3 px-4 py-2.5 text-xs">
+            <li key={event.id} className="flex items-start gap-3 px-5 py-3 text-xs transition-colors hover:bg-white/[0.02]">
               <span
                 className={cn(
                   "mt-1 h-1.5 w-1.5 shrink-0 rounded-full",
@@ -244,7 +325,7 @@ export default function Dashboard() {
             </li>
           ))}
           {(eventsState.data?.events.length ?? 0) === 0 ? (
-            <li className="px-4 py-4 text-xs text-slate-500">Nenhum evento registrado ainda.</li>
+            <li className="px-5 py-5 text-xs text-slate-500">Nenhum evento registrado ainda.</li>
           ) : null}
         </ul>
       </Card>

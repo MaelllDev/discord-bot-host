@@ -44,7 +44,7 @@ export function SupportLink({
       rel="noreferrer noopener"
       title="Apoiar o projeto com qualquer valor (Pix)"
       className={cn(
-        "inline-flex w-full items-center justify-center gap-1.5 rounded-xl border border-amber-400/25 bg-gradient-to-r from-amber-500/20 via-rose-500/15 to-violet-500/20 font-medium text-amber-100 transition hover:from-amber-500/30 hover:via-rose-500/25 hover:to-violet-500/30",
+        "inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-amber-400/25 bg-amber-500/10 font-medium text-amber-100 transition hover:bg-amber-500/20",
         compact ? "px-2.5 py-2 text-[11px]" : "px-3.5 py-2 text-xs",
         iconOnly && "lg:px-0",
         className,
@@ -66,7 +66,7 @@ export function CreatorLinks({ className }: { className?: string }) {
           href={link.href}
           target="_blank"
           rel="noreferrer noopener"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-slate-700 bg-slate-800/60 px-2.5 py-1.5 text-xs font-medium text-slate-200 transition hover:border-indigo-700 hover:bg-indigo-950/40 hover:text-indigo-200"
+          className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-slate-800/60 px-2.5 py-1.5 text-xs font-medium text-slate-200 transition hover:border-indigo-700 hover:bg-indigo-950/40 hover:text-indigo-200"
         >
           {link.label}
           <span aria-hidden="true" className="text-[10px] text-slate-500">

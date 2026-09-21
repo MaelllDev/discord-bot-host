@@ -35,9 +35,9 @@ export default function Login({ onSuccess, expired = false }: { onSuccess: () =>
             alt=""
             width={56}
             height={56}
-            className="mx-auto h-14 w-14 rounded-2xl border border-slate-700/60 bg-slate-900/60 object-contain p-1"
+            className="mx-auto h-14 w-14 rounded-xl border border-indigo-400/20 bg-slate-900 object-contain p-1 shadow-[0_0_34px_-16px_rgb(124_92_255/0.9)]"
           />
-          <h1 className="mt-4 text-xl font-semibold text-slate-100">BotPanel</h1>
+          <h1 className="mt-4 text-2xl font-semibold tracking-tight text-slate-50">BotPanel</h1>
           <p className="mt-1 text-xs text-slate-500">Acesso restrito ao administrador</p>
         </div>
 
@@ -49,7 +49,7 @@ export default function Login({ onSuccess, expired = false }: { onSuccess: () =>
           </div>
         ) : null}
 
-        <form onSubmit={submit} className="card space-y-4 p-5">
+        <form onSubmit={submit} className="card space-y-4 p-5 sm:p-6">
           <Field label="Senha do painel">
             <Input
               type="password"
@@ -64,7 +64,7 @@ export default function Login({ onSuccess, expired = false }: { onSuccess: () =>
 
           {error ? <Alert tone="red">{error}</Alert> : null}
 
-          <Button type="submit" variant="primary" className="w-full" loading={loading} disabled={password.length === 0}>
+          <Button type="submit" size="lg" variant="primary" className="w-full" loading={loading} disabled={password.length === 0}>
             {loading ? "Entrando…" : "Entrar"}
           </Button>
 

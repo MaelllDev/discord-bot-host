@@ -42,7 +42,7 @@ export default function EnvEditor({ value, onChange }: { value: EnvVar[]; onChan
               onClick={() => update(index, { secret: !item.secret })}
               className={cn(
                 "rounded-md border px-2 py-1 text-[11px] transition",
-                item.secret ? "border-amber-800/60 bg-amber-950/40 text-amber-300" : "border-slate-700 text-slate-400",
+                item.secret ? "border-amber-800/60 bg-amber-950/40 text-amber-300" : "border-white/10 text-slate-400",
               )}
               title="Marcar como segredo (valor mascarado na interface)"
             >

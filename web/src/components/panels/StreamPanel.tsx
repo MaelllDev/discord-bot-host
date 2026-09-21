@@ -105,16 +105,17 @@ export default function StreamPanel({
         </Alert>
       ) : null}
 
-      <div className="card flex h-[calc(100vh-16rem)] min-h-[22rem] flex-col">
-        <header className="flex flex-wrap items-center gap-2 border-b border-slate-800 px-4 py-3">
-          <h2 className="flex items-center gap-2 text-sm font-semibold text-slate-100">
-            <IconTerminal className="h-4 w-4 text-slate-400" />
+      <div className="card flex h-[calc(100vh-16rem)] min-h-[22rem] flex-col overflow-hidden">
+        <header className="flex flex-wrap items-center gap-2 border-b border-white/8 px-4 py-3">
+          <h2 className="flex items-center gap-2 text-sm font-semibold tracking-tight text-slate-100">
+            <span className="icon-tile icon-tile-sm icon-tile-neutral">
+              <IconTerminal className="h-4 w-4" />
+            </span>
             {mode === "logs" ? "Logs em tempo real" : "Console (stdin)"}
           </h2>
           <Badge tone={stream.connected ? "green" : stream.reconnecting ? "amber" : "red"}>
             {stream.connected ? "conectado" : stream.reconnecting ? "reconectando" : "desconectado"}
           </Badge>
-          <Badge>{stream.lines.length} linhas</Badge>
           {stderrOnly > 0 ? <Badge tone="red">{stderrOnly} em stderr</Badge> : null}
 
           <div className="ml-auto flex flex-wrap items-center gap-2">
@@ -122,8 +123,10 @@ export default function StreamPanel({
               type="button"
               onClick={() => setAutoscroll((value) => !value)}
               className={cn(
-                "rounded-md border px-2 py-1 text-[11px] transition",
-                autoscroll ? "border-emerald-800/60 bg-emerald-950/40 text-emerald-300" : "border-slate-700 text-slate-400",
+                "rounded-md border px-2 py-1 text-[11px] font-medium transition-colors",
+                autoscroll
+                  ? "border-emerald-400/25 bg-emerald-500/10 text-emerald-300"
+                  : "border-white/10 bg-white/[0.04] text-slate-400 hover:text-slate-200",
               )}
             >
               auto-scroll {autoscroll ? "on" : "off"}
@@ -160,11 +163,22 @@ export default function StreamPanel({
           </div>
         </header>
 
-        <div
-          ref={containerRef}
-          onScroll={onScroll}
-          className="terminal flex-1 overflow-auto bg-slate-950/80 px-4 py-3"
-        >
+        {/* Barra de janela: deixa o console com cara de terminal de verdade. */}
+        <div className="flex items-center gap-3 border-b border-white/8 bg-slate-950/70 px-4 py-2">
+          <span aria-hidden="true" className="flex shrink-0 items-center gap-1.5">
+            <span className="h-2.5 w-2.5 rounded-full bg-rose-500/70" />
+            <span className="h-2.5 w-2.5 rounded-full bg-amber-500/70" />
+            <span className="h-2.5 w-2.5 rounded-full bg-emerald-500/70" />
+          </span>
+          <span className="truncate font-mono text-[10.5px] text-slate-500">
+            {slug} · {mode === "logs" ? "stdout/stderr" : "stdin"}
+          </span>
+          <span className="ml-auto shrink-0 font-mono text-[10.5px] text-slate-500 tabular-nums">
+            {stream.lines.length} linhas
+          </span>
+        </div>
+
+        <div ref={containerRef} onScroll={onScroll} className="terminal flex-1 overflow-auto bg-slate-950/60 px-4 py-3">
           {lines.length === 0 ? (
             <p className="text-slate-500">
               {mode === "logs"
@@ -177,7 +191,11 @@ export default function StreamPanel({
                 key={line.id}
                 className={cn(
                   "whitespace-pre-wrap break-words",
-                  line.stream === "stderr" ? "text-rose-300/90" : line.stream === "system" ? "text-sky-300/90" : "text-slate-300",
+                  line.stream === "stderr"
+                    ? "text-rose-300/90"
+                    : line.stream === "system"
+                      ? "text-indigo-300/90"
+                      : "text-slate-300",
                 )}
               >
                 {line.line}
@@ -187,7 +205,7 @@ export default function StreamPanel({
         </div>
 
         {!autoscroll && !atBottom && lines.length > 0 ? (
-          <div className="border-t border-slate-800 px-4 py-1.5 text-right">
+          <div className="border-t border-white/8 bg-slate-950/60 px-4 py-1.5 text-right">
             <button
               type="button"
               className="text-[11px] text-indigo-300 hover:text-indigo-200"
@@ -203,7 +221,7 @@ export default function StreamPanel({
         ) : null}
 
         {mode === "logs" ? (
-          <footer className="border-t border-slate-800 px-4 py-2.5">
+          <footer className="border-t border-white/8 bg-slate-950/40 px-4 py-2.5">
             <p className="text-[11px] text-slate-500">
               <strong>Analisar com IA</strong> envia as últimas linhas visíveis para o provedor configurado em{" "}
               <span className="font-mono">Configurações</span>, com tokens e chaves mascarados. O trecho enviado fica
@@ -213,8 +231,11 @@ export default function StreamPanel({
         ) : null}
 
         {mode === "console" ? (
-          <footer className="border-t border-slate-800 px-4 py-3">
-            <div className="flex gap-2">
+          <footer className="border-t border-white/8 bg-slate-950/40 px-4 py-3">
+            <div className="flex items-center gap-2">
+              <span aria-hidden="true" className="shrink-0 font-mono text-xs text-indigo-300">
+                $
+              </span>
               <Input
                 value={command}
                 onChange={(event) => setCommand(event.target.value)}

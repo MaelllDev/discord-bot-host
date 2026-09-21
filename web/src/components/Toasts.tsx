@@ -20,10 +20,19 @@ interface ToastApi {
 
 const ToastContext = createContext<ToastApi | null>(null);
 
-const TONES: Record<ToastTone, string> = {
-  success: "border-emerald-800/70 bg-emerald-950/85 text-emerald-100",
-  error: "border-rose-900/70 bg-rose-950/85 text-rose-100",
-  info: "border-slate-700 bg-slate-900/90 text-slate-100",
+const TONES: Record<ToastTone, { card: string; tile: string }> = {
+  success: {
+    card: "border-emerald-400/20",
+    tile: "border-emerald-400/25 bg-emerald-500/12 text-emerald-300",
+  },
+  error: {
+    card: "border-rose-400/20",
+    tile: "border-rose-400/25 bg-rose-500/12 text-rose-300",
+  },
+  info: {
+    card: "border-white/10",
+    tile: "border-indigo-400/25 bg-indigo-500/12 text-indigo-300",
+  },
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
@@ -69,18 +78,23 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             key={toast.id}
             role="status"
             className={cn(
-              "pointer-events-auto flex w-full max-w-sm items-start gap-2 rounded-lg border px-3 py-2 text-xs shadow-lg backdrop-blur",
-              TONES[toast.tone],
+              "pop-in pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-lg border bg-slate-900 p-3.5 shadow-[0_24px_48px_-24px_rgb(0_0_0/0.9)]",
+              TONES[toast.tone].card,
             )}
           >
-            <span className="mt-0.5 shrink-0">
+            <span
+              className={cn(
+                "flex h-8 w-8 shrink-0 items-center justify-center rounded-md border",
+                TONES[toast.tone].tile,
+              )}
+            >
               {toast.tone === "success" ? <IconCheck className="h-4 w-4" /> : <IconAlert className="h-4 w-4" />}
             </span>
-            <p className="flex-1 leading-relaxed">{toast.message}</p>
+            <p className="flex-1 pt-1 text-xs leading-relaxed text-slate-200">{toast.message}</p>
             <button
               type="button"
               onClick={() => dismiss(toast.id)}
-              className="shrink-0 rounded p-0.5 opacity-70 transition hover:opacity-100"
+              className="shrink-0 rounded-sm p-1 text-slate-500 transition-colors hover:bg-white/5 hover:text-slate-200"
               aria-label="Fechar notificação"
             >
               <IconClose className="h-3.5 w-3.5" />

@@ -13,13 +13,14 @@ import {
   Card,
   EmptyState,
   Input,
+  PageHeader,
   Select,
   SkeletonRows,
   StatusBadge,
   cn,
 } from "../components/ui.tsx";
 import AppIcon from "../components/AppIcon.tsx";
-import { IconPlay, IconPlus, IconRestart, IconSearch, IconStop } from "../components/icons.tsx";
+import { IconApps, IconPlay, IconPlus, IconRestart, IconSearch, IconStop } from "../components/icons.tsx";
 
 type Filter = "all" | "online" | "stopped" | "unknown";
 
@@ -100,30 +101,29 @@ export default function Apps() {
 
   return (
     <div className="space-y-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="text-xl font-semibold text-slate-100">Aplicações</h1>
-          <p className="mt-1 text-xs text-slate-500">
-            {apps.length} aplicação(ões) · {apps.filter((app) => isLive(app.status)).length} em execução
-          </p>
-        </div>
-        <Link to="/apps/new">
-          <Button variant="primary">
-            <IconPlus className="h-4 w-4" /> Nova aplicação
-          </Button>
-        </Link>
-      </header>
+      <PageHeader
+        title="Aplicações"
+        icon={<IconApps className="h-4 w-4" />}
+        subtitle={`${apps.length} aplicação(ões) · ${apps.filter((app) => isLive(app.status)).length} em execução`}
+        actions={
+          <Link to="/apps/new">
+            <Button variant="primary">
+              <IconPlus className="h-4 w-4" /> Nova aplicação
+            </Button>
+          </Link>
+        }
+      />
 
       {appsState.error ? <Alert tone="red">{appsState.error}</Alert> : null}
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="card flex flex-wrap items-center gap-2 p-3">
         <div className="relative min-w-56 flex-1">
-          <IconSearch className="pointer-events-none absolute left-2.5 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
+          <IconSearch className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="buscar por nome, identificador ou runtime…"
-            className="pl-8"
+            className="pl-9"
           />
         </div>
         <Select value={filter} onChange={(event) => setFilter(event.target.value as Filter)} className="w-auto">
@@ -163,9 +163,9 @@ export default function Apps() {
         <Card bodyClassName="p-0" className="hidden lg:block">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
-              <thead className="border-b border-slate-800 text-[11px] uppercase tracking-wide text-slate-500">
+              <thead className="border-b border-white/8 text-[10.5px] uppercase tracking-wider text-slate-500">
                 <tr>
-                  <th className="px-4 py-3 font-medium">Aplicação</th>
+                  <th className="px-5 py-3.5 font-semibold">Aplicação</th>
                   <th className="px-3 py-3 font-medium">Estado</th>
                   <th className="px-3 py-3 font-medium">Runtime</th>
                   <th className="px-3 py-3 font-medium">Versão</th>
@@ -176,10 +176,10 @@ export default function Apps() {
                   <th className="px-3 py-3 text-right font-medium">Ações</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/70">
+              <tbody className="divide-y divide-white/6">
                 {visible.map((app) => (
-                  <tr key={app.id} className="hover:bg-slate-800/30">
-                    <td className="px-4 py-3">
+                  <tr key={app.id} className="transition-colors hover:bg-white/[0.03]">
+                    <td className="px-5 py-3.5">
                       <div className="flex items-center gap-2.5">
                         <AppIcon app={app} size="sm" />
                         <div className="min-w-0">
@@ -196,7 +196,7 @@ export default function Apps() {
                     <td className="px-3 py-3 text-slate-300">{runtimeLabel(app.runtime)}</td>
                     <td className="px-3 py-3">
                       {app.activeRelease > 0 ? (
-                        <Badge tone="sky">v{app.activeRelease}</Badge>
+                        <Badge tone="indigo">v{app.activeRelease}</Badge>
                       ) : (
                         <Badge tone="amber">sem versão</Badge>
                       )}

@@ -107,7 +107,7 @@ export default function FilesPanel({ slug, app }: { slug: string; app: AppSummar
           editingCode ? "border-indigo-900/60 bg-indigo-950/30 text-indigo-200" : "border-emerald-900/60 bg-emerald-950/25 text-emerald-200",
         )}
       >
-        <div className="flex gap-1 rounded-lg border border-slate-800 bg-slate-950/60 p-1">
+        <div className="flex gap-1 rounded-lg border border-white/8 bg-slate-950/60 p-1">
           <button
             type="button"
             onClick={() => switchRoot("code")}
@@ -146,7 +146,7 @@ export default function FilesPanel({ slug, app }: { slug: string; app: AppSummar
       </div>
 
       <div className="card">
-        <header className="flex flex-wrap items-center gap-2 border-b border-slate-800 px-4 py-3">
+        <header className="flex flex-wrap items-center gap-2 border-b border-white/8 px-4 py-3">
           <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(event) => void upload(event.target.files)} />
           <Button size="sm" loading={uploading} onClick={() => fileInputRef.current?.click()}>
             <IconUpload className="h-3.5 w-3.5" /> Enviar arquivos
@@ -162,7 +162,7 @@ export default function FilesPanel({ slug, app }: { slug: string; app: AppSummar
           </span>
         </header>
 
-        <div className="flex flex-wrap items-center gap-1 border-b border-slate-800 px-4 py-2 text-xs text-slate-400">
+        <div className="flex flex-wrap items-center gap-1 border-b border-white/8 px-4 py-2 text-xs text-slate-400">
           <button type="button" className="hover:text-slate-200" onClick={() => setPath("")}>
             {root === "code" ? "raiz do código" : "volume /data"}
           </button>
@@ -203,7 +203,7 @@ export default function FilesPanel({ slug, app }: { slug: string; app: AppSummar
             <p className="py-6 text-center text-xs text-slate-500">Pasta vazia.</p>
           ) : null}
 
-          <ul className="divide-y divide-slate-800/70">
+          <ul className="divide-y divide-white/6">
             {(listingState.data?.entries ?? []).map((entry) => {
               const relative = path.length > 0 ? `${path}/${entry.name}` : entry.name;
               return (

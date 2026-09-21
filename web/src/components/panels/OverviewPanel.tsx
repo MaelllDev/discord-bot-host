@@ -62,16 +62,17 @@ export default function OverviewPanel({
           os limites configurados. */}
       <Card>
         <div className="flex flex-wrap items-center gap-5">
-          <span className="relative shrink-0">
-            <span className="absolute -inset-1.5 rounded-[2rem] bg-gradient-to-br from-indigo-500/30 via-violet-500/20 to-transparent blur-lg" />
-            <AppIcon app={app} size="xl" className="relative ring-1 ring-white/10" />
-          </span>
+          <AppIcon
+            app={app}
+            size="xl"
+            className="ring-1 ring-indigo-400/20 shadow-[0_0_38px_-16px_rgb(124_92_255/0.8)]"
+          />
           <div className="min-w-0 flex-1 space-y-2">
             <div className="flex flex-wrap items-center gap-2">
               <h2 className="text-lg font-semibold text-slate-100">{app.name}</h2>
               <StatusBadge status={status} />
               {app.activeRelease > 0 ? (
-                <Badge tone="sky">versão {app.activeRelease}</Badge>
+                <Badge tone="indigo">versão {app.activeRelease}</Badge>
               ) : (
                 <Badge tone="amber">sem versão</Badge>
               )}
@@ -331,7 +332,7 @@ export default function OverviewPanel({
             <Spinner /> carregando…
           </div>
         ) : (
-          <ul className="divide-y divide-slate-800/70 text-xs">
+          <ul className="divide-y divide-white/6 text-xs">
             {(deploymentsState.data?.deployments ?? []).slice(0, 6).map((deployment) => (
               <li key={deployment.id} className="flex flex-wrap items-center gap-2 px-4 py-2.5">
                 <span className="text-slate-300">
