@@ -1,3 +1,5 @@
+import { activeLocale, tActive } from "./i18n/language.ts";
+
 export function humanBytes(bytes: number | null | undefined): string {
   if (bytes === null || bytes === undefined || !Number.isFinite(bytes) || bytes <= 0) return "0 B";
   const units = ["B", "KB", "MB", "GB", "TB"];
@@ -40,7 +42,7 @@ export function formatDateTime(iso: string | null | undefined): string {
   if (!iso) return "—";
   const time = Date.parse(iso);
   if (!Number.isFinite(time)) return "—";
-  return new Date(time).toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+  return new Date(time).toLocaleString(activeLocale(), { dateStyle: "short", timeStyle: "short" });
 }
 
 export function relativeTime(iso: string | null | undefined): string {
@@ -48,9 +50,9 @@ export function relativeTime(iso: string | null | undefined): string {
   const time = Date.parse(iso);
   if (!Number.isFinite(time)) return "—";
   const diff = Math.round((Date.now() - time) / 1000);
-  if (Math.abs(diff) < 60) return "agora";
-  if (diff > 0) return `há ${humanDuration(diff)}`;
-  return `em ${humanDuration(-diff)}`;
+  if (Math.abs(diff) < 60) return tActive("time.now");
+  if (diff > 0) return tActive("time.ago", { value: humanDuration(diff) });
+  return tActive("time.in", { value: humanDuration(-diff) });
 }
 
 const SENSITIVE = /(token|secret|password|senha|key|api[_-]?key|webhook|dsn)/i;
@@ -65,40 +67,27 @@ export function maskSecret(value: string): string {
   return `${value.slice(0, 2)}${"•".repeat(Math.min(14, Math.max(4, value.length - 4)))}${value.slice(-2)}`;
 }
 
+const KNOWN_STATUSES = new Set([
+  "running",
+  "starting",
+  "restarting",
+  "stopped",
+  "crashed",
+  "paused",
+  "deploying",
+  "unknown",
+]);
+
+/** Rótulo do status vindo da API (`status.running`, `status.stopped`, …). */
 export function statusLabel(status: string): string {
-  switch (status) {
-    case "running":
-      return "Em execução";
-    case "starting":
-      return "Iniciando";
-    case "restarting":
-      return "Reiniciando";
-    case "stopped":
-      return "Parado";
-    case "crashed":
-      return "Falhou";
-    case "paused":
-      return "Pausado";
-    case "deploying":
-      return "Publicando";
-    case "unknown":
-      return "Desconhecido";
-    default:
-      return "Desconhecido";
-  }
+  return tActive(`status.${KNOWN_STATUSES.has(status) ? status : "unknown"}`);
 }
 
+const KNOWN_RUNTIMES = new Set(["node", "python", "custom"]);
+
+/** Rótulo do runtime detectado (`runtime.node`, `runtime.python`, …). */
 export function runtimeLabel(runtime: string): string {
-  switch (runtime) {
-    case "node":
-      return "Node.js";
-    case "python":
-      return "Python";
-    case "custom":
-      return "Comando livre";
-    default:
-      return runtime;
-  }
+  return KNOWN_RUNTIMES.has(runtime) ? tActive(`runtime.${runtime}`) : runtime;
 }
 
 /** Quantas casas decimais um número precisa para ser legível. */

@@ -4,6 +4,7 @@ import type { AppSummary } from "../types.ts";
 import { api } from "../api.ts";
 import { errorText } from "../hooks.ts";
 import { humanBytes, humanCpu, humanDuration, humanRam, relativeTime, runtimeLabel } from "../format.ts";
+import { useI18n } from "../i18n/index.tsx";
 import { Alert, Badge, Button, Meter, StatusBadge } from "./ui.tsx";
 import AppIcon from "./AppIcon.tsx";
 import { IconPlay, IconRestart, IconStop } from "./icons.tsx";
@@ -14,6 +15,7 @@ export function isLive(status: string): boolean {
 }
 
 export default function AppCard({ app, onChanged }: { app: AppSummary; onChanged: () => void }) {
+  const { t } = useI18n();
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const toast = useToast();
@@ -23,8 +25,7 @@ export default function AppCard({ app, onChanged }: { app: AppSummary; onChanged
     setError(null);
     try {
       await api.action(app.slug, action);
-      const label = action === "start" ? "iniciada" : action === "stop" ? "parada" : "reiniciada";
-      toast.success(`Aplicação "${app.name}" ${label}.`);
+      toast.success(t("apps.actionDone", { name: app.name, action: t(`actions.${action}.done`) }));
       onChanged();
     } catch (caught) {
       const message = errorText(caught);
@@ -60,50 +61,58 @@ export default function AppCard({ app, onChanged }: { app: AppSummary; onChanged
         <Badge tone="indigo">{runtimeLabel(app.runtime)}</Badge>
         <Badge>{humanCpu(app.cpu)}</Badge>
         <Badge>{humanRam(app.memoryMb)}</Badge>
-        {app.activeRelease > 0 ? <Badge tone="indigo">v{app.activeRelease}</Badge> : <Badge tone="amber">sem versão</Badge>}
-        {live && resources ? <Badge>up {humanDuration(resources.uptimeSeconds)}</Badge> : null}
-        {app.status === "unknown" ? <Badge tone="red">Docker inacessível</Badge> : null}
+        {app.activeRelease > 0 ? (
+          <Badge tone="indigo">v{app.activeRelease}</Badge>
+        ) : (
+          <Badge tone="amber">{t("apps.noVersion")}</Badge>
+        )}
+        {live && resources ? <Badge>{t("apps.upFor", { value: humanDuration(resources.uptimeSeconds) })}</Badge> : null}
+        {app.status === "unknown" ? <Badge tone="red">{t("panel.dockerUnavailable")}</Badge> : null}
       </div>
 
       <div className="space-y-2.5">
         <Meter
-          label="CPU"
-          value={resources ? `${resources.cpuPercent.toFixed(1)}% de ${humanCpu(app.cpu)}` : "sem dados"}
+          label={t("metric.cpu")}
+          value={
+            resources
+              ? t("metric.ofLimit", { used: `${resources.cpuPercent.toFixed(1)}%`, limit: humanCpu(app.cpu) })
+              : t("metric.noData")
+          }
           percent={cpuPercentOfLimit}
           tone={cpuPercentOfLimit > 80 ? "amber" : "indigo"}
         />
         <Meter
-          label="Memória"
+          label={t("metric.memory")}
           value={
             resources
-              ? `${humanBytes(resources.memoryBytes)} de ${humanRam(app.memoryMb)}`
-              : `limite ${humanRam(app.memoryMb)}`
+              ? t("metric.ofLimit", { used: humanBytes(resources.memoryBytes), limit: humanRam(app.memoryMb) })
+              : t("metric.limitOnly", { limit: humanRam(app.memoryMb) })
           }
           percent={resources?.memoryPercent ?? 0}
           tone={(resources?.memoryPercent ?? 0) > 85 ? "red" : (resources?.memoryPercent ?? 0) > 65 ? "amber" : "green"}
         />
       </div>
 
-      <p className="text-[11px] text-slate-500">Atualizada {relativeTime(app.updatedAt)}</p>
+      <p className="text-[11px] text-slate-500">{t("apps.updatedAt", { value: relativeTime(app.updatedAt) })}</p>
 
       {error ? <Alert tone="red">{error}</Alert> : null}
 
       <div className="mt-auto flex flex-wrap gap-2">
         {live ? (
           <Button size="sm" loading={busy === "stop"} onClick={() => void run("stop")}>
-            <IconStop className="h-3.5 w-3.5" /> Parar
+            <IconStop className="h-3.5 w-3.5" /> {t("actions.stop")}
           </Button>
         ) : (
           <Button size="sm" variant="success" loading={busy === "start"} onClick={() => void run("start")}>
-            <IconPlay className="h-3.5 w-3.5" /> Iniciar
+            <IconPlay className="h-3.5 w-3.5" /> {t("actions.start")}
           </Button>
         )}
         <Button size="sm" loading={busy === "restart"} onClick={() => void run("restart")} disabled={!live}>
-          <IconRestart className="h-3.5 w-3.5" /> Reiniciar
+          <IconRestart className="h-3.5 w-3.5" /> {t("actions.restart")}
         </Button>
         <Link to={`/apps/${app.slug}`} className="ml-auto">
           <Button size="sm" variant="ghost">
-            Gerenciar →
+            {t("apps.manage")} →
           </Button>
         </Link>
       </div>

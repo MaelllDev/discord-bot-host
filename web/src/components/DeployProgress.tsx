@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { DEPLOY_PHASES, phaseStates } from "../deployPhases.ts";
+import { useI18n } from "../i18n/index.tsx";
 import { cn } from "./ui.tsx";
 import { IconCheck, IconClose } from "./icons.tsx";
 
@@ -41,6 +42,7 @@ export default function DeployProgress({
   failed: boolean;
   extra?: ReactNode;
 }) {
+  const { t } = useI18n();
   const states = phaseStates(log, finished, failed);
   return (
     <div className="space-y-3">
@@ -48,7 +50,7 @@ export default function DeployProgress({
         {DEPLOY_PHASES.map((phase, index) => {
           const state = states[index] ?? "pending";
           return (
-            <li key={phase.label} className="flex items-center gap-2 text-xs">
+            <li key={phase.titleKey} className="flex items-center gap-2 text-xs">
               <Marker state={state} failed={failed && state === "active"} />
               <span
                 className={cn(
@@ -56,7 +58,7 @@ export default function DeployProgress({
                   failed && state === "active" && "text-rose-300",
                 )}
               >
-                {phase.label}
+                {t(phase.titleKey)}
               </span>
             </li>
           );

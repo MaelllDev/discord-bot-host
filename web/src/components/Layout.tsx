@@ -2,8 +2,11 @@ import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation } from "react-router-dom";
 import { api } from "../api.ts";
 import { useAsync } from "../hooks.ts";
+import { useI18n } from "../i18n/index.tsx";
+import { useBranding } from "../branding.tsx";
 import { Badge, Button, cn } from "./ui.tsx";
 import AppIcon from "./AppIcon.tsx";
+import LanguageSwitch from "./LanguageSwitch.tsx";
 import { CreatorCredit, SupportLink } from "./Credits.tsx";
 import RouteErrorBoundary from "./ErrorBoundary.tsx";
 import {
@@ -34,32 +37,33 @@ function statusDotClass(status: string): string {
   }
 }
 
+/** Rótulos vêm das mensagens (`nav.*`); os caminhos são técnicos. */
 const NAV_GROUPS = [
   {
-    label: null,
+    labelKey: null,
     items: [
-      { to: "/", label: "Dashboard", icon: IconDashboard, end: true },
-      { to: "/apps", label: "Aplicações", icon: IconApps, end: true },
-      { to: "/apps/new", label: "Nova aplicação", icon: IconPlus, end: false },
+      { to: "/", labelKey: "nav.dashboard", icon: IconDashboard, end: true },
+      { to: "/apps", labelKey: "nav.apps", icon: IconApps, end: true },
+      { to: "/apps/new", labelKey: "nav.newApp", icon: IconPlus, end: false },
     ],
   },
   {
-    label: "Gerenciar",
+    labelKey: "nav.group.manage",
     items: [
-      { to: "/backups", label: "Backups", icon: IconArchive, end: false },
-      { to: "/system", label: "Sistema", icon: IconServer, end: false },
-      { to: "/settings", label: "Configurações", icon: IconSettings, end: false },
+      { to: "/backups", labelKey: "nav.backups", icon: IconArchive, end: false },
+      { to: "/system", labelKey: "nav.system", icon: IconServer, end: false },
+      { to: "/settings", labelKey: "nav.settings", icon: IconSettings, end: false },
     ],
   },
 ] as const;
 
-const PAGE_TITLES: Record<string, string> = {
-  "/": "Dashboard",
-  "/apps": "Aplicações",
-  "/apps/new": "Nova aplicação",
-  "/backups": "Backups",
-  "/system": "Sistema",
-  "/settings": "Configurações",
+const PAGE_TITLE_KEYS: Record<string, string> = {
+  "/": "nav.dashboard",
+  "/apps": "nav.apps",
+  "/apps/new": "nav.newApp",
+  "/backups": "nav.backups",
+  "/system": "nav.system",
+  "/settings": "nav.settings",
 };
 
 const COLLAPSE_KEY = "botpanel.sidebar.collapsed";
@@ -74,6 +78,7 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
     }
   });
   const location = useLocation();
+  const { t } = useI18n();
 
   useEffect(() => {
     try {
@@ -90,12 +95,20 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
   const system = systemState.data;
   const dockerOk = system?.docker.available ?? true;
   const runningCount = apps.filter((app) => app.status === "running").length;
-  const panelName = system?.panelName ?? "BotPanel";
+  const branding = useBranding();
+  const panelName = branding.name;
 
   // Título da barra superior: a rota atual, ou o nome da aplicação aberta.
   const detailSlug = location.pathname.startsWith("/apps/") ? location.pathname.slice("/apps/".length) : null;
   const currentApp = detailSlug ? apps.find((app) => app.slug === detailSlug) : undefined;
-  const pageTitle = currentApp?.name ?? PAGE_TITLES[location.pathname] ?? panelName;
+  const pageTitleKey = PAGE_TITLE_KEYS[location.pathname];
+  const pageTitle = currentApp?.name ?? (pageTitleKey ? t(pageTitleKey) : panelName);
+
+  // A aba do navegador mostra "<página> · <nome do painel>" e o nome puro no
+  // dashboard — o mesmo padrão nos dois idiomas.
+  useEffect(() => {
+    document.title = pageTitle === panelName ? panelName : `${pageTitle} · ${panelName}`;
+  }, [pageTitle, panelName]);
 
   const navLink = ({ isActive }: { isActive: boolean }): string =>
     cn(
@@ -127,7 +140,7 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
             onClick={() => setOpen(false)}
           >
             <img
-              src="/logo.png"
+              src={branding.iconUrl || "/logo.png"}
               alt=""
               width={28}
               height={28}
@@ -142,7 +155,7 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
             size="sm"
             className="lg:hidden"
             onClick={() => setOpen(false)}
-            aria-label="Fechar menu"
+            aria-label={t("nav.closeMenu")}
           >
             ✕
           </Button>
@@ -160,9 +173,9 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
               {panelName.slice(0, 1)}
             </span>
             <div className={cn("flex min-w-0 flex-1 flex-col", collapsed && "lg:hidden")}>
-              <span className="truncate text-xs font-medium text-slate-200">Instância local</span>
+              <span className="truncate text-xs font-medium text-slate-200">{t("panel.localInstance")}</span>
               <span className="truncate text-[10.5px] text-slate-500">
-                {apps.length} app(s) · {runningCount} no ar
+                {t("panel.summary", { apps: apps.length, running: runningCount })}
               </span>
             </div>
             {!collapsed && runningCount > 0 ? (
@@ -175,16 +188,16 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
 
         <nav className={cn("flex-1 overflow-y-auto px-2 pb-3", collapsed && "lg:px-1")}>
           {NAV_GROUPS.map((group, groupIndex) => (
-            <div key={group.label ?? `group-${groupIndex}`}>
+            <div key={group.labelKey ?? `group-${groupIndex}`}>
               {groupIndex > 0 ? <div aria-hidden="true" className="mx-1.5 my-1.5 h-px bg-white/8" /> : null}
-              {group.label ? (
+              {group.labelKey ? (
                 <p
                   className={cn(
                     "px-2.5 pb-1 pt-2 text-[10px] font-semibold uppercase tracking-wider text-slate-500",
                     collapsed && "lg:sr-only",
                   )}
                 >
-                  {group.label}
+                  {t(group.labelKey)}
                 </p>
               ) : null}
               <ul className="flex flex-col gap-0.5">
@@ -195,7 +208,7 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
                       end={item.end}
                       className={navLink}
                       onClick={() => setOpen(false)}
-                      title={collapsed ? item.label : undefined}
+                      title={collapsed ? t(item.labelKey) : undefined}
                     >
                       {({ isActive }) => (
                         <>
@@ -205,7 +218,7 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
                               isActive ? "text-indigo-300" : "text-slate-500 group-hover:text-slate-300",
                             )}
                           />
-                          <span className={cn("truncate", collapsed && "lg:hidden")}>{item.label}</span>
+                          <span className={cn("truncate", collapsed && "lg:hidden")}>{t(item.labelKey)}</span>
                         </>
                       )}
                     </NavLink>
@@ -223,7 +236,7 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
               collapsed && "lg:sr-only",
             )}
           >
-            Minhas aplicações
+            {t("nav.myApps")}
           </p>
           <ul className="flex flex-col gap-0.5">
             {apps.map((app) => {
@@ -269,13 +282,13 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
             })}
             {apps.length === 0 && !appsState.loading && !collapsed ? (
               <li className="px-2.5 py-3 text-xs leading-relaxed text-slate-500">
-                Nenhuma aplicação ainda.{" "}
+                {t("panel.noApps")}{" "}
                 <Link
                   to="/apps/new"
                   className="text-indigo-300 transition-colors hover:text-indigo-200"
                   onClick={() => setOpen(false)}
                 >
-                  Criar a primeira
+                  {t("panel.createFirst")}
                 </Link>
               </li>
             ) : null}
@@ -289,13 +302,13 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
                 "flex h-8 items-center gap-2 px-2.5 text-[11px] font-medium text-emerald-400",
                 collapsed && "lg:justify-center lg:px-0",
               )}
-              title={system?.docker.version ? `Docker ${system.docker.version}` : "Docker conectado"}
+              title={system?.docker.version ? `Docker ${system.docker.version}` : t("panel.dockerConnected")}
             >
               <span className="relative flex h-1.5 w-1.5 shrink-0">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400" />
                 <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-emerald-400" />
               </span>
-              <span className={cn(collapsed && "lg:sr-only")}>Tudo operacional</span>
+              <span className={cn(collapsed && "lg:sr-only")}>{t("panel.allOperational")}</span>
             </div>
           ) : (
             <div
@@ -305,9 +318,11 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
               )}
             >
               <IconAlert className="h-3.5 w-3.5 shrink-0" />
-              <span className={cn(collapsed && "lg:sr-only")}>Docker indisponível</span>
+              <span className={cn(collapsed && "lg:sr-only")}>{t("panel.dockerUnavailable")}</span>
             </div>
           )}
+
+          <LanguageSwitch compact className={cn(collapsed && "lg:mx-auto")} />
 
           <SupportLink compact iconOnly={collapsed} />
 
@@ -316,10 +331,10 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
             size="sm"
             className={cn("justify-start", collapsed && "lg:justify-center lg:px-0")}
             onClick={onLogout}
-            title="Sair"
+            title={t("nav.logout")}
           >
             <IconLogout className="h-3.5 w-3.5" />
-            <span className={cn(collapsed && "lg:hidden")}>Sair</span>
+            <span className={cn(collapsed && "lg:hidden")}>{t("nav.logout")}</span>
           </Button>
 
           <CreatorCredit className={cn("px-1 pt-1", collapsed && "lg:hidden")} />
@@ -329,8 +344,8 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
         <button
           type="button"
           onClick={() => setCollapsed((value) => !value)}
-          aria-label={collapsed ? "Expandir menu" : "Minimizar menu"}
-          title={collapsed ? "Expandir menu" : "Minimizar menu"}
+          aria-label={collapsed ? t("nav.expandMenu") : t("nav.collapseMenu")}
+          title={collapsed ? t("nav.expandMenu") : t("nav.collapseMenu")}
           className="absolute -right-3 top-4 hidden h-6 w-6 items-center justify-center rounded-full border border-white/10 bg-slate-800 text-slate-400 shadow-lg transition-colors hover:border-white/20 hover:text-slate-100 lg:flex"
         >
           <IconChevronLeft className={cn("h-3.5 w-3.5 transition-transform duration-200", collapsed && "rotate-180")} />
@@ -340,7 +355,7 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
       {open ? (
         <button
           type="button"
-          aria-label="Fechar menu"
+          aria-label={t("nav.closeMenu")}
           className="fixed inset-0 z-30 bg-slate-950/70 backdrop-blur-sm lg:hidden"
           onClick={() => setOpen(false)}
         />
@@ -353,7 +368,7 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
             size="sm"
             className="lg:hidden"
             onClick={() => setOpen(true)}
-            aria-label="Abrir menu"
+            aria-label={t("nav.openMenu")}
           >
             <IconMenu className="h-4 w-4" />
           </Button>
@@ -369,7 +384,11 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
                 <Badge
                   tone={currentApp.status === "running" ? "green" : currentApp.status === "unknown" ? "red" : "slate"}
                 >
-                  {currentApp.status === "running" ? "no ar" : currentApp.status === "unknown" ? "desconhecido" : "parada"}
+                  {currentApp.status === "running"
+                    ? t("topbar.running")
+                    : currentApp.status === "unknown"
+                      ? t("topbar.unknown")
+                      : t("topbar.stopped")}
                 </Badge>
               </span>
             ) : null}
@@ -377,18 +396,19 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
           <div className="ml-auto flex items-center gap-2">
             {dockerOk ? (
               <Badge tone="green" className="hidden sm:inline-flex">
-                Docker conectado
+                {t("panel.dockerConnected")}
               </Badge>
             ) : (
-              <Badge tone="red">
-                <IconAlert className="h-3 w-3" /> Docker off
+              <Badge tone="red" className="hidden sm:inline-flex">
+                <IconAlert className="h-3 w-3" /> {t("panel.dockerOff")}
               </Badge>
             )}
+            <LanguageSwitch compact />
             {location.pathname === "/apps/new" ? null : (
               <Link to="/apps/new">
                 <Button variant="primary" size="sm">
                   <IconPlus className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Nova aplicação</span>
+                  <span className="hidden sm:inline">{t("nav.newApp")}</span>
                 </Button>
               </Link>
             )}
@@ -397,8 +417,7 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
 
         {!dockerOk ? (
           <div className="border-b border-rose-900/40 bg-rose-950/30 px-4 py-2 text-[11px] text-rose-200">
-            O Docker está inacessível. Os estados das aplicações aparecem como <strong>Desconhecido</strong> — não como
-            paradas — até o daemon voltar.
+            {t("notice.dockerDown.before")} <strong>{t("status.unknown")}</strong> {t("notice.dockerDown.after")}
           </div>
         ) : null}
 

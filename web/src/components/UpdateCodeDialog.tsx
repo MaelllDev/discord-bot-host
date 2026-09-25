@@ -7,6 +7,7 @@ import { Alert, Badge, Button, Input, Modal, ProgressBar, Spinner } from "./ui.t
 import { IconCheck, IconUpload } from "./icons.tsx";
 import DeploymentLogView from "./DeploymentLogView.tsx";
 import { useToast } from "./Toasts.tsx";
+import { useI18n } from "../i18n/index.tsx";
 
 type Stage = "select" | "uploading" | "ready" | "deploying" | "done";
 
@@ -21,6 +22,7 @@ export default function UpdateCodeDialog({
   onClose: () => void;
   onDeployed: () => void;
 }) {
+  const { t } = useI18n();
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [stage, setStage] = useState<Stage>("select");
@@ -78,7 +80,7 @@ export default function UpdateCodeDialog({
     setStage("deploying");
     setError(null);
     try {
-      const deploy = await api.deploy(app.slug, uploadId, notes || `Atualização para ${app.name}`);
+      const deploy = await api.deploy(app.slug, uploadId, notes || t("update.defaultNote", { name: app.name }));
       setDeploymentId(deploy.deploymentId);
       setReleaseSeq(deploy.releaseSeq);
     } catch (caught) {
@@ -90,22 +92,22 @@ export default function UpdateCodeDialog({
   return (
     <Modal
       open={open}
-      title={`Atualizar código de ${app.name}`}
+      title={t("update.title", { name: app.name })}
       onClose={close}
       wide
       footer={
         <>
           <Button variant="ghost" onClick={close} disabled={stage === "uploading" || stage === "deploying"}>
-            {stage === "done" ? "Fechar" : "Cancelar"}
+            {stage === "done" ? t("common.close") : t("common.cancel")}
           </Button>
           {stage === "ready" ? (
             <Button variant="primary" onClick={() => void startDeploy()}>
-              Publicar versão
+              {t("update.publish")}
             </Button>
           ) : null}
           {stage === "select" || stage === "uploading" ? (
             <Button variant="primary" loading={stage === "uploading"} onClick={() => fileInputRef.current?.click()}>
-              Selecionar ZIP
+              {t("update.selectZip")}
             </Button>
           ) : null}
         </>
@@ -113,12 +115,18 @@ export default function UpdateCodeDialog({
     >
       <div className="space-y-4 text-xs text-slate-300">
         <div className="flex flex-wrap items-center gap-2">
-          <Badge tone="indigo">versão atual: {app.activeRelease > 0 ? `v${app.activeRelease}` : "nenhuma"}</Badge>
           <Badge tone="indigo">
-            próxima versão: {releaseSeq !== null ? `v${releaseSeq}` : `v${app.activeRelease + 1}`}
+            {t("update.current", {
+              value: app.activeRelease > 0 ? `v${app.activeRelease}` : t("overview.none"),
+            })}
+          </Badge>
+          <Badge tone="indigo">
+            {t("update.next", {
+              value: releaseSeq !== null ? `v${releaseSeq}` : `v${app.activeRelease + 1}`,
+            })}
           </Badge>
           <span className="text-slate-500">
-            A versão atual continua no ar durante todo o processo; <code>/data</code> nunca é tocado.
+            {t("update.keepOnAir.before")} <code>/data</code> {t("update.keepOnAir.after")}
           </span>
         </div>
 
@@ -136,10 +144,8 @@ export default function UpdateCodeDialog({
         {stage === "select" ? (
           <div className="rounded-lg border-2 border-dashed border-white/8 px-6 py-8 text-center">
             <IconUpload className="mx-auto h-6 w-6 text-slate-500" />
-            <p className="mt-2 text-sm text-slate-300">Selecione o ZIP com a nova versão do código</p>
-            <p className="mt-1 text-[11px] text-slate-500">
-              O painel extrai, instala dependências em um container descartável e só ativa se tudo der certo.
-            </p>
+            <p className="mt-2 text-sm text-slate-300">{t("update.drop.title")}</p>
+            <p className="mt-1 text-[11px] text-slate-500">{t("update.drop.note")}</p>
           </div>
         ) : null}
 
@@ -147,7 +153,7 @@ export default function UpdateCodeDialog({
           <div className="space-y-2">
             <div className="flex items-center justify-between text-[11px] text-slate-400">
               <span className="flex items-center gap-2">
-                <Spinner className="h-3.5 w-3.5" /> Enviando {fileName}…
+                <Spinner className="h-3.5 w-3.5" /> {t("update.uploading", { name: fileName })}
               </span>
               <span className="font-mono">
                 {percent}% ({humanBytes(uploadedBytes)})
@@ -163,9 +169,15 @@ export default function UpdateCodeDialog({
               <Badge tone="green">
                 <IconCheck className="h-3 w-3" /> {fileName}
               </Badge>
-              <Badge tone="indigo">runtime: {runtimeLabel(detection.runtime)}</Badge>
-              {detection.entry ? <Badge>principal: {detection.entry}</Badge> : null}
-              {detection.depsFile ? <Badge>deps: {detection.depsFile}</Badge> : null}
+              <Badge tone="indigo">
+                {t("update.detected.runtime", { value: runtimeLabel(detection.runtime) })}
+              </Badge>
+              {detection.entry ? (
+                <Badge>{t("update.detected.entry", { value: detection.entry })}</Badge>
+              ) : null}
+              {detection.depsFile ? (
+                <Badge>{t("update.detected.deps", { value: detection.depsFile })}</Badge>
+              ) : null}
             </div>
             {detection.notes.length > 0 ? (
               <ul className="space-y-1 text-[11px] text-slate-400">
@@ -181,7 +193,7 @@ export default function UpdateCodeDialog({
           <Input
             value={notes}
             onChange={(event) => setNotes(event.target.value)}
-            placeholder="Descrição da versão (opcional): corrige o comando de ticket…"
+            placeholder={t("update.notes.placeholder")}
           />
         ) : null}
 
@@ -194,10 +206,10 @@ export default function UpdateCodeDialog({
             onFinished={(status) => {
               setStage("done");
               if (status === "success") {
-                toast.success(`Versão publicada em ${app.name}.`);
+                toast.success(t("update.success", { name: app.name }));
                 onDeployed();
               } else {
-                toast.error("A publicação falhou — a versão anterior continua ativa.");
+                toast.error(t("update.failed"));
               }
             }}
           />
@@ -205,8 +217,7 @@ export default function UpdateCodeDialog({
 
         {stage === "done" ? (
           <Alert tone="slate">
-            Você pode acompanhar o histórico completo na aba <strong>Versões</strong> e voltar para uma versão anterior
-            quando precisar.
+            {t("update.done.before")} <strong>{t("update.done.strong")}</strong> {t("update.done.after")}
           </Alert>
         ) : null}
       </div>

@@ -2,43 +2,50 @@
  * As etapas abaixo são derivadas do log que o backend realmente grava no
  * deployment (ver `runDeploy` em server/src/apps/service.ts). Não há etapas
  * inventadas: cada marcador corresponde a uma linha real do log.
+ *
+ * ATENÇÃO: os marcadores (`done`/`active`) casam com o texto do log do backend,
+ * que é escrito em português e não acompanha o idioma da interface. Só o
+ * `titleKey` é traduzido.
  */
 export interface DeployPhase {
-  label: string;
+  /** Chave da mensagem com o nome da etapa. */
+  titleKey: string;
   /** Marcadores que, quando presentes no log, indicam que a etapa foi concluída. */
   done: string[];
   /** Marcadores que indicam que a etapa está em andamento. */
   active: string[];
 }
 
+import { tActive } from "./i18n/language.ts";
+
 export const DEPLOY_PHASES: DeployPhase[] = [
   {
-    label: "Extraindo arquivos",
+    titleKey: "deploy.extracting",
     done: ["✓", "arquivo(s)"],
     active: ["Extraindo pacote"],
   },
   {
-    label: "Detectando runtime",
+    titleKey: "deploy.detecting",
     done: ["Runtime detectado"],
     active: ["Extraindo pacote"],
   },
   {
-    label: "Instalando dependências",
+    titleKey: "deploy.installing",
     done: ["Dependências instaladas", "instalação ignorada"],
     active: ["Instalando dependências"],
   },
   {
-    label: "Criando container",
+    titleKey: "deploy.creating",
     done: ["Container iniciado", "publicado e em execução"],
     active: ["Criando rede isolada", "Container", "criado"],
   },
   {
-    label: "Iniciando aplicação",
+    titleKey: "deploy.starting",
     done: ["publicado e em execução"],
     active: ["Ativando release"],
   },
   {
-    label: "Concluído",
+    titleKey: "deploy.done",
     done: ["publicado e em execução"],
     active: [],
   },
@@ -75,5 +82,5 @@ export function currentPhaseLabel(log: string, finished: boolean, failed: boolea
   const states = phaseStates(log, finished, failed);
   const index = states.findIndex((state) => state !== "done");
   const phase = DEPLOY_PHASES[index === -1 ? DEPLOY_PHASES.length - 1 : index];
-  return phase ? phase.label : "Processando";
+  return tActive(phase ? phase.titleKey : "deploy.processing");
 }

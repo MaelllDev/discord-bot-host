@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import { api } from "../../api.ts";
 import { errorText, useAsync } from "../../hooks.ts";
+import { useI18n } from "../../i18n/index.tsx";
 import type { AppSummary, FileEntry } from "../../types.ts";
 import { formatDateTime, humanBytes } from "../../format.ts";
 import { Alert, Badge, Button, Input, Modal, Spinner, Textarea, InlineCode, cn } from "../ui.tsx";
@@ -20,6 +21,7 @@ interface EditorState {
 
 export default function FilesPanel({ slug, app }: { slug: string; app: AppSummary }) {
   const toast = useToast();
+  const { t } = useI18n();
   const [root, setRoot] = useState<"code" | "data">("code");
   const [path, setPath] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -116,7 +118,7 @@ export default function FilesPanel({ slug, app }: { slug: string; app: AppSummar
               root === "code" ? "bg-slate-800 text-slate-100" : "text-slate-400 hover:text-slate-200",
             )}
           >
-            Código (release {app.activeRelease > 0 ? `v${app.activeRelease}` : "—"})
+            {t("files.tab.code", { value: app.activeRelease > 0 ? `v${app.activeRelease}` : "—" })}
           </button>
           <button
             type="button"
@@ -126,20 +128,19 @@ export default function FilesPanel({ slug, app }: { slug: string; app: AppSummar
               root === "data" ? "bg-slate-800 text-slate-100" : "text-slate-400 hover:text-slate-200",
             )}
           >
-            Dados persistentes (/data)
+            {t("files.tab.data")}
           </button>
         </div>
 
         <span className="min-w-0 flex-1">
           {editingCode ? (
             <>
-              Você está editando os arquivos do <strong>release ativo</strong>. Alterações aqui valem para a versão em
-              execução e podem ser sobrescritas no próximo deploy — o ideal é publicar um ZIP novo.
+              {t("files.codeWarning.before")} <strong>{t("files.activeRelease")}</strong>{" "}
+              {t("files.codeWarning.after")}
             </>
           ) : (
             <>
-              Este diretório é o volume <InlineCode>/data</InlineCode> do container: nunca é apagado por deploy e é onde
-              ficam bancos, sessões e configurações.
+              {t("files.dataInfo.before")} <InlineCode>/data</InlineCode> {t("files.dataInfo.after")}
             </>
           )}
         </span>
@@ -149,22 +150,22 @@ export default function FilesPanel({ slug, app }: { slug: string; app: AppSummar
         <header className="flex flex-wrap items-center gap-2 border-b border-white/8 px-4 py-3">
           <input ref={fileInputRef} type="file" multiple className="hidden" onChange={(event) => void upload(event.target.files)} />
           <Button size="sm" loading={uploading} onClick={() => fileInputRef.current?.click()}>
-            <IconUpload className="h-3.5 w-3.5" /> Enviar arquivos
+            <IconUpload className="h-3.5 w-3.5" /> {t("files.upload")}
           </Button>
           <Button size="sm" onClick={() => setFolderPrompt("")}>
-            <IconPlus className="h-3.5 w-3.5" /> Nova pasta
+            <IconPlus className="h-3.5 w-3.5" /> {t("files.newFolder")}
           </Button>
           <Button size="sm" onClick={() => void listingState.reload()}>
-            <IconRefresh className="h-3.5 w-3.5" /> Atualizar
+            <IconRefresh className="h-3.5 w-3.5" /> {t("common.refresh")}
           </Button>
           <span className="ml-auto text-[11px] text-slate-500">
-            {listingState.data ? `${listingState.data.entries.length} item(ns)` : ""}
+            {listingState.data ? t("files.itemCount", { count: listingState.data.entries.length }) : ""}
           </span>
         </header>
 
         <div className="flex flex-wrap items-center gap-1 border-b border-white/8 px-4 py-2 text-xs text-slate-400">
           <button type="button" className="hover:text-slate-200" onClick={() => setPath("")}>
-            {root === "code" ? "raiz do código" : "volume /data"}
+            {root === "code" ? t("files.codeRoot") : t("files.dataVolume")}
           </button>
           {segments.map((segment, index) => (
             <span key={segment + index} className="flex items-center gap-1">
@@ -188,19 +189,17 @@ export default function FilesPanel({ slug, app }: { slug: string; app: AppSummar
           ) : null}
 
           {root === "code" && app.activeRelease === 0 ? (
-            <Alert tone="amber">
-              Nenhum release publicado ainda: não existem arquivos de código para navegar. Publique uma versão primeiro.
-            </Alert>
+            <Alert tone="amber">{t("files.noRelease")}</Alert>
           ) : null}
 
           {listingState.loading ? (
             <div className="flex items-center gap-2 py-6 text-xs text-slate-400">
-              <Spinner /> lendo diretório…
+              <Spinner /> {t("files.readingDir")}
             </div>
           ) : null}
 
           {!listingState.loading && (listingState.data?.entries.length ?? 0) === 0 ? (
-            <p className="py-6 text-center text-xs text-slate-500">Pasta vazia.</p>
+            <p className="py-6 text-center text-xs text-slate-500">{t("files.emptyFolder")}</p>
           ) : null}
 
           <ul className="divide-y divide-white/6">
@@ -242,13 +241,13 @@ export default function FilesPanel({ slug, app }: { slug: string; app: AppSummar
                           className="rounded-md px-2 py-1 text-[11px] text-slate-400 hover:bg-slate-800 hover:text-slate-200"
                           onClick={() => void openFile(entry)}
                         >
-                          abrir
+                          {t("files.open")}
                         </button>
                         <a
                           href={api.downloadUrl(slug, root, relative)}
                           className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-slate-400 hover:bg-slate-800 hover:text-slate-200"
                         >
-                          <IconDownload className="h-3 w-3" /> baixar
+                          <IconDownload className="h-3 w-3" /> {t("files.download")}
                         </a>
                       </>
                     ) : null}
@@ -257,27 +256,30 @@ export default function FilesPanel({ slug, app }: { slug: string; app: AppSummar
                       className="rounded-md px-2 py-1 text-[11px] text-slate-400 hover:bg-slate-800 hover:text-slate-200"
                       onClick={() => setRenameTarget({ from: relative, value: entry.name })}
                     >
-                      renomear
+                      {t("files.rename")}
                     </button>
                     <button
                       type="button"
                       className="flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-rose-300 hover:bg-rose-950/40"
                       onClick={() =>
                         setConfirm({
-                          title: "Excluir item",
+                          title: t("files.confirmDelete.title"),
                           description: (
                             <p>
-                              Remover <span className="font-mono text-slate-100">{relative}</span>{" "}
-                              {entry.type === "directory" ? "e todo o conteúdo dela" : "do disco"}? Esta ação não pode ser
-                              desfeita.
+                              {t("files.confirmDelete.remove")}{" "}
+                              <span className="font-mono text-slate-100">{relative}</span>{" "}
+                              {entry.type === "directory"
+                                ? t("files.confirmDelete.directory")
+                                : t("files.confirmDelete.file")}{" "}
+                              {t("files.confirmDelete.tail")}
                             </p>
                           ),
-                          confirmLabel: "Excluir",
+                          confirmLabel: t("actions.delete"),
                           danger: true,
                           run: async () => {
                             try {
                               await api.removeFile(slug, root, relative);
-                              toast.success("Item removido.");
+                              toast.success(t("files.removed"));
                               await listingState.reload();
                             } catch (caught) {
                               toast.error(errorText(caught));
@@ -287,7 +289,7 @@ export default function FilesPanel({ slug, app }: { slug: string; app: AppSummar
                         })
                       }
                     >
-                      <IconTrash className="h-3 w-3" /> excluir
+                      <IconTrash className="h-3 w-3" /> {t("files.remove")}
                     </button>
                   </span>
                 </li>
@@ -302,7 +304,9 @@ export default function FilesPanel({ slug, app }: { slug: string; app: AppSummar
         title={
           <span className="flex items-center gap-2">
             <span className="font-mono">{editor?.path}</span>
-            <Badge tone={editingCode ? "indigo" : "green"}>{editingCode ? "código" : "/data"}</Badge>
+            <Badge tone={editingCode ? "indigo" : "green"}>
+              {editingCode ? t("files.badgeCode") : "/data"}
+            </Badge>
           </span>
         }
         onClose={() => setEditor(null)}
@@ -310,10 +314,10 @@ export default function FilesPanel({ slug, app }: { slug: string; app: AppSummar
         footer={
           <>
             <span className="mr-auto text-[11px] text-slate-500">
-              {editor && editor.content !== editor.original ? "alterações não salvas" : "sem alterações"}
+              {editor && editor.content !== editor.original ? t("files.unsaved") : t("files.noChanges")}
             </span>
             <Button variant="ghost" onClick={() => setEditor(null)}>
-              Cancelar
+              {t("common.cancel")}
             </Button>
             <Button
               variant="primary"
@@ -321,27 +325,23 @@ export default function FilesPanel({ slug, app }: { slug: string; app: AppSummar
               disabled={!editor || editor.binary || editor.content === editor.original}
               onClick={() => void saveEditor()}
             >
-              Salvar alterações
+              {t("files.save")}
             </Button>
           </>
         }
       >
         {editor?.loading ? (
           <div className="flex items-center gap-2 text-xs text-slate-400">
-            <Spinner /> carregando arquivo…
+            <Spinner /> {t("files.loadingFile")}
           </div>
         ) : editor?.binary ? (
           <Alert tone="amber">
-            Este arquivo parece ser binário e não pode ser editado como texto. Use <strong>baixar</strong> para abri-lo
-            localmente.
+            {t("files.binary.before")} <strong>{t("files.download")}</strong> {t("files.binary.after")}
           </Alert>
         ) : (
           <div className="space-y-2">
             {editor?.truncated ? (
-              <Alert tone="amber">
-                Arquivo muito grande: apenas os primeiros 512 KB foram carregados. Salvar aqui substituiria o conteúdo
-                completo — baixe o arquivo para editá-lo por inteiro.
-              </Alert>
+              <Alert tone="amber">{t("files.truncated")}</Alert>
             ) : null}
             <Textarea
               rows={20}
@@ -355,12 +355,12 @@ export default function FilesPanel({ slug, app }: { slug: string; app: AppSummar
 
       <Modal
         open={folderPrompt !== null}
-        title="Nova pasta"
+        title={t("files.newFolder")}
         onClose={() => setFolderPrompt(null)}
         footer={
           <>
             <Button variant="ghost" onClick={() => setFolderPrompt(null)}>
-              Cancelar
+              {t("common.cancel")}
             </Button>
             <Button
               variant="primary"
@@ -373,7 +373,7 @@ export default function FilesPanel({ slug, app }: { slug: string; app: AppSummar
                 void api
                   .mkdir(slug, root, relative)
                   .then(() => {
-                    toast.success(`Pasta ${relative} criada.`);
+                    toast.success(t("files.folderCreated", { name: relative }));
                     setFolderPrompt(null);
                     return listingState.reload();
                   })
@@ -384,7 +384,7 @@ export default function FilesPanel({ slug, app }: { slug: string; app: AppSummar
                   .finally(() => setBusy(false));
               }}
             >
-              Criar pasta
+              {t("files.createFolder")}
             </Button>
           </>
         }
@@ -392,19 +392,19 @@ export default function FilesPanel({ slug, app }: { slug: string; app: AppSummar
         <Input
           value={folderPrompt ?? ""}
           onChange={(event) => setFolderPrompt(event.target.value)}
-          placeholder="nome-da-pasta"
+          placeholder={t("files.folderPlaceholder")}
           autoFocus
         />
       </Modal>
 
       <Modal
         open={renameTarget !== null}
-        title="Renomear"
+        title={t("files.rename")}
         onClose={() => setRenameTarget(null)}
         footer={
           <>
             <Button variant="ghost" onClick={() => setRenameTarget(null)}>
-              Cancelar
+              {t("common.cancel")}
             </Button>
             <Button
               variant="primary"
@@ -416,7 +416,7 @@ export default function FilesPanel({ slug, app }: { slug: string; app: AppSummar
                 void api
                   .renameFile(slug, root, renameTarget.from, `${parent}${renameTarget.value}`)
                   .then(() => {
-                    toast.success("Item renomeado.");
+                    toast.success(t("files.renamed"));
                     setRenameTarget(null);
                     return listingState.reload();
                   })
@@ -427,7 +427,7 @@ export default function FilesPanel({ slug, app }: { slug: string; app: AppSummar
                   .finally(() => setBusy(false));
               }}
             >
-              Renomear
+              {t("files.rename")}
             </Button>
           </>
         }

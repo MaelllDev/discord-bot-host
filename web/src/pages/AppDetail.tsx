@@ -27,10 +27,12 @@ import FilesPanel from "../components/panels/FilesPanel.tsx";
 import ReleasesPanel from "../components/panels/ReleasesPanel.tsx";
 import ConfigPanel from "../components/panels/ConfigPanel.tsx";
 import BackupsPanel from "../components/panels/BackupsPanel.tsx";
+import { useI18n } from "../i18n/index.tsx";
 
 type Tab = "overview" | "logs" | "console" | "files" | "releases" | "backups" | "config";
 
 export default function AppDetail() {
+  const { t } = useI18n();
   const { slug = "" } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -57,8 +59,7 @@ export default function AppDetail() {
     setError(null);
     try {
       await api.action(slug, action);
-      const label = action === "start" ? "iniciada" : action === "stop" ? "parada" : "reiniciada";
-      toast.success(`Aplicação ${label}.`);
+      toast.success(t("apps.detailActionDone", { action: t(`actions.${action}.done`) }));
       await reload();
       stream.refresh();
     } catch (caught) {
@@ -82,10 +83,10 @@ export default function AppDetail() {
   if (!app) {
     return (
       <div className="space-y-3">
-        <PageHeader title="Aplicação" />
-        <Alert tone="red">{appState.error ?? "Aplicação não encontrada."}</Alert>
+        <PageHeader title={t("app.singular")} />
+        <Alert tone="red">{appState.error ?? t("app.notFound")}</Alert>
         <Link to="/apps">
-          <Button>Voltar para as aplicações</Button>
+          <Button>{t("app.backToApps")}</Button>
         </Link>
       </div>
     );
@@ -97,28 +98,28 @@ export default function AppDetail() {
 
   const askDelete = (): void => {
     setConfirm({
-      title: `Excluir "${app.name}"?`,
+      title: t("app.delete.title", { name: app.name }),
       description: (
         <>
           <p>
-            Serão removidos a aplicação do painel, o container{" "}
-            <span className="font-mono">botpanel-{app.slug}</span> e a rede isolada dela.
+            {t("app.delete.body.before")} <span className="font-mono">botpanel-{app.slug}</span>{" "}
+            {t("app.delete.body.after")}
           </p>
           <p className="mt-2 text-slate-400">
-            As imagens Docker <strong>não</strong> são removidas: são compartilhadas entre aplicações e ficam em cache no
-            host. Escolha abaixo o que fazer com os arquivos em disco.
+            {t("app.delete.images.before")} <strong>{t("app.delete.images.not")}</strong>{" "}
+            {t("app.delete.images.after")}
           </p>
         </>
       ),
-      confirmLabel: "Excluir aplicação",
+      confirmLabel: t("config.deleteApp"),
       danger: true,
       checkbox: {
         label: (
           <span>
-            Apagar também os arquivos em disco
+            {t("app.delete.checkbox")}
             <span className="block text-[11px] text-slate-500">
-              Código de todas as versões e o volume <span className="font-mono">/data</span>. Se desmarcado, eles
-              permanecem em <span className="font-mono">apps/{app.slug}</span>.
+              {t("app.delete.checkbox.hint.before")} <span className="font-mono">/data</span>
+              {t("app.delete.checkbox.hint.middle")} <span className="font-mono">apps/{app.slug}</span>{"."}
             </span>
           </span>
         ),
@@ -126,7 +127,7 @@ export default function AppDetail() {
       run: async (checked) => {
         try {
           await api.removeApp(app.slug, checked);
-          toast.success(`Aplicação "${app.name}" excluída.`);
+          toast.success(t("app.deleted", { name: app.name }));
           navigate("/apps");
         } catch (caught) {
           toast.error(errorText(caught));
@@ -142,7 +143,7 @@ export default function AppDetail() {
         to="/apps"
         className="inline-flex items-center gap-1 text-[11px] text-slate-500 transition-colors hover:text-slate-300"
       >
-        ← Aplicações
+        ← {t("nav.apps")}
       </Link>
 
       {/* Cartão de identidade: ícone grande, nome, estado e as ações da aplicação. */}
@@ -167,39 +168,42 @@ export default function AppDetail() {
                 <Badge>
                   <span className="font-mono">{app.slug}</span>
                 </Badge>
+                <Badge tone="indigo">{runtimeLabel(app.runtime)}</Badge>
+                <Badge>{humanRam(app.memoryMb)} · {humanCpu(app.cpu)}</Badge>
                 <Badge>
                   <span className="font-mono">{app.image}</span>
                 </Badge>
                 {app.activeRelease > 0 ? (
-                  <Badge tone="indigo">versão {app.activeRelease}</Badge>
+                  <Badge tone="indigo">{t("overview.versionTag", { value: app.activeRelease })}</Badge>
                 ) : (
-                  <Badge tone="amber">nenhuma versão publicada</Badge>
+                  <Badge tone="amber">{t("app.noVersionPublished")}</Badge>
                 )}
                 {live && resources && resources.uptimeSeconds > 0 ? (
-                  <Badge tone="green">no ar há {humanDuration(resources.uptimeSeconds)}</Badge>
+                  <Badge tone="green">{t("app.upFor", { value: humanDuration(resources.uptimeSeconds) })}</Badge>
                 ) : null}
               </div>
+              {app.description ? <p className="max-w-prose text-xs text-slate-400">{app.description}</p> : null}
             </div>
           </div>
 
           <div className="flex flex-wrap gap-2">
             {live ? (
               <Button variant="outline" loading={busy === "stop"} onClick={() => void run("stop")}>
-                <IconStop className="h-3.5 w-3.5" /> Parar
+                <IconStop className="h-3.5 w-3.5" /> {t("actions.stop")}
               </Button>
             ) : (
               <Button variant="success" loading={busy === "start"} onClick={() => void run("start")}>
-                <IconPlay className="h-3.5 w-3.5" /> Iniciar
+                <IconPlay className="h-3.5 w-3.5" /> {t("actions.start")}
               </Button>
             )}
             <Button loading={busy === "restart"} onClick={() => void run("restart")} disabled={app.activeRelease === 0}>
-              <IconRestart className="h-3.5 w-3.5" /> Reiniciar
+              <IconRestart className="h-3.5 w-3.5" /> {t("actions.restart")}
             </Button>
             <Button variant="primary" onClick={() => setUpdateOpen(true)}>
-              <IconUpload className="h-3.5 w-3.5" /> Atualizar código
+              <IconUpload className="h-3.5 w-3.5" /> {t("actions.updateCode")}
             </Button>
             <Button variant="danger" onClick={askDelete}>
-              <IconTrash className="h-3.5 w-3.5" /> Excluir
+              <IconTrash className="h-3.5 w-3.5" /> {t("actions.delete")}
             </Button>
           </div>
         </div>
@@ -208,8 +212,8 @@ export default function AppDetail() {
       {error ? <Alert tone="red">{error}</Alert> : null}
       {app.activeRelease === 0 ? (
         <Alert tone="amber">
-          Nenhuma versão publicada ainda. Use <strong>Atualizar código</strong> para enviar o ZIP — o container só é
-          criado depois do primeiro release.
+          {t("app.noReleaseAlert.before")} <strong>{t("actions.updateCode")}</strong>{" "}
+          {t("app.noReleaseAlert.after")}
         </Alert>
       ) : null}
 
@@ -218,45 +222,34 @@ export default function AppDetail() {
           value={tab}
           onChange={setTab}
           tabs={[
-            { id: "overview", label: "Visão geral" },
-            { id: "console", label: "Console" },
-            { id: "logs", label: "Logs" },
-            { id: "files", label: "Arquivos" },
-            { id: "releases", label: `Versões (${app.releaseCount})` },
-            { id: "backups", label: "Backups" },
-            { id: "config", label: "Configuração" },
+            { id: "overview", label: t("tabs.overview") },
+            { id: "console", label: t("tabs.console") },
+            { id: "logs", label: t("tabs.logs") },
+            { id: "files", label: t("tabs.files") },
+            { id: "releases", label: t("tabs.releases", { count: app.releaseCount }) },
+            { id: "backups", label: t("tabs.backups") },
+            { id: "config", label: t("tabs.config") },
           ]}
         />
         <span className="flex items-center gap-2 text-[11px] text-slate-500">
           {stream.connected ? (
             <>
-              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> tempo real conectado
+              <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" /> {t("app.realtime.connected")}
             </>
           ) : stream.reconnecting ? (
             <>
-              <Spinner className="h-3 w-3" /> reconectando ao painel…
+              <Spinner className="h-3 w-3" /> {t("app.realtime.reconnecting")}
             </>
           ) : (
             <>
-              <span className="h-1.5 w-1.5 rounded-full bg-slate-600" /> tempo real desconectado
+              <span className="h-1.5 w-1.5 rounded-full bg-slate-600" /> {t("app.realtime.disconnected")}
             </>
           )}
         </span>
       </div>
 
       <div className="min-w-0 space-y-5">
-        {tab === "overview" ? (
-          <OverviewPanel
-            app={app}
-            stream={stream}
-            onReload={() => void reload()}
-            onUpdateCode={() => setUpdateOpen(true)}
-            onDelete={askDelete}
-            onEditIcon={() => setTab("config")}
-            onAction={(action) => void run(action)}
-            busyAction={busy}
-          />
-        ) : null}
+        {tab === "overview" ? <OverviewPanel app={app} stream={stream} onReload={() => void reload()} /> : null}
         {tab === "logs" ? (
           <StreamPanel slug={slug} stream={stream} mode="logs" appStatus={liveStatus} appName={app.name} />
         ) : null}
@@ -293,12 +286,12 @@ export default function AppDetail() {
 
       <Modal
         open={deploymentId !== null}
-        title="Publicando nova versão"
+        title={t("app.publishModal")}
         onClose={() => setDeploymentId(null)}
         wide
         footer={
           <Button variant="ghost" onClick={() => setDeploymentId(null)}>
-            Fechar
+            {t("common.close")}
           </Button>
         }
       >

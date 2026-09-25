@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState } from "react";
 import type { ReactNode } from "react";
+import { useI18n } from "../i18n/index.tsx";
 import { IconAlert, IconCheck, IconClose } from "./icons.tsx";
 import { cn } from "./ui.tsx";
 
@@ -36,6 +37,7 @@ const TONES: Record<ToastTone, { card: string; tile: string }> = {
 };
 
 export function ToastProvider({ children }: { children: ReactNode }) {
+  const { t } = useI18n();
   const [toasts, setToasts] = useState<Toast[]>([]);
   const nextId = useRef(1);
   const timers = useRef(new Map<number, number>());
@@ -90,12 +92,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
             >
               {toast.tone === "success" ? <IconCheck className="h-4 w-4" /> : <IconAlert className="h-4 w-4" />}
             </span>
-            <p className="flex-1 pt-1 text-xs leading-relaxed text-slate-200">{toast.message}</p>
+            <p className="flex-1 pt-1 text-xs leading-relaxed whitespace-pre-line text-slate-200">{toast.message}</p>
             <button
               type="button"
               onClick={() => dismiss(toast.id)}
               className="shrink-0 rounded-sm p-1 text-slate-500 transition-colors hover:bg-white/5 hover:text-slate-200"
-              aria-label="Fechar notificação"
+              aria-label={t("common.closeNotification")}
             >
               <IconClose className="h-3.5 w-3.5" />
             </button>

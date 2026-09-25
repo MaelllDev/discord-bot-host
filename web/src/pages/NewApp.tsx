@@ -1,10 +1,20 @@
-import { useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api, uploadZipWithProgress } from "../api.ts";
 import type { EnvVar, ProjectDetection, RuntimeKind, UploadResult } from "../types.ts";
 import { humanBytes, humanCpu, humanRam, runtimeLabel } from "../format.ts";
-import { errorText, useDeployment } from "../hooks.ts";
+import { errorText, errorTextRich, useDeployment } from "../hooks.ts";
+import {
+  commandIssues,
+  envIssues,
+  imageProblem,
+  nameProblem,
+  portsIssues,
+  translateIssues,
+} from "../validation.ts";
+import type { ValidationIssue } from "../validation.ts";
 import EnvEditor from "../components/EnvEditor.tsx";
+import ImageUpload from "../components/ImageUpload.tsx";
 import AppIcon from "../components/AppIcon.tsx";
 import DeployProgress from "../components/DeployProgress.tsx";
 import { useToast } from "../components/Toasts.tsx";
@@ -24,6 +34,7 @@ import {
   cn,
 } from "../components/ui.tsx";
 import { IconCheck, IconPlus, IconUpload } from "../components/icons.tsx";
+import { useI18n } from "../i18n/index.tsx";
 
 interface RuntimePreset {
   label: string;
@@ -40,9 +51,10 @@ const PRESETS: Record<RuntimeKind, RuntimePreset> = {
 
 const MEMORY_PRESETS = [128, 256, 512, 1024, 2048, 4096];
 const CPU_PRESETS = [0.25, 0.5, 1, 2, 4];
-const STEPS = ["Código", "Como executar", "Recursos", "Revisar"] as const;
+const STEP_KEYS = ["newApp.step.code", "newApp.step.run", "newApp.step.resources", "newApp.step.review"] as const;
 
 export default function NewApp() {
+  const { t } = useI18n();
   const navigate = useNavigate();
   const toast = useToast();
   const fileInputRef = useRef<HTMLInputElement | null>(null);
@@ -81,16 +93,17 @@ export default function NewApp() {
   // Criação
   const [submitting, setSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<string | null>(null);
+  const [attempted, setAttempted] = useState(false);
   const [deploymentId, setDeploymentId] = useState<number | null>(null);
   const [createdSlug, setCreatedSlug] = useState<string | null>(null);
 
   const deploy = useDeployment(createdSlug, deploymentId, (status) => {
     if (!createdSlug) return;
     if (status === "success") {
-      toast.success("Aplicação criada e primeira versão publicada.");
+      toast.success(t("newApp.deploy.created"));
       navigate(`/apps/${createdSlug}`);
     } else {
-      toast.error("A publicação inicial falhou — a aplicação foi criada sem versão ativa.");
+      toast.error(t("newApp.deploy.failed"));
     }
   });
 
@@ -101,6 +114,36 @@ export default function NewApp() {
     if (entry === "" || entry === PRESETS[runtime].entry) setEntry(preset.entry);
     if (depsFile === "" || depsFile === PRESETS[runtime].depsFile) setDepsFile(preset.depsFile);
   };
+
+  const portList = useMemo(
+    () =>
+      ports
+        .split(/[\s,]+/)
+        .map((item) => item.trim())
+        .filter(Boolean),
+    [ports],
+  );
+
+  /**
+   * Mesma checagem do backend (`server/src/apps/validate.ts`), executada no
+   * navegador, com TODOS os problemas de uma vez e cada um amarrado à etapa do
+   * assistente onde aparece — nada de bloqueio silencioso. `allowedImages` só
+   * existe no servidor, então a lista de permissões fica por conta da API.
+   */
+  const allIssues = useMemo((): { step: number; text: string }[] => {
+    const found: { issue: ValidationIssue; step: number }[] = [];
+    const nameIssue = nameProblem(name);
+    if (nameIssue) found.push({ issue: nameIssue, step: 0 });
+    const imageIssue = imageProblem(image);
+    if (imageIssue) found.push({ issue: imageIssue, step: 1 });
+    for (const issue of commandIssues(runtime, entry, startCommand)) found.push({ issue, step: 1 });
+    for (const issue of envIssues(env)) found.push({ issue, step: 2 });
+    for (const issue of portsIssues(portList)) found.push({ issue, step: 2 });
+    return found.map(({ issue, step }) => ({ step, text: t(`errors.${issue.code}`, issue.params) }));
+  }, [name, image, runtime, entry, startCommand, env, portList, t]);
+
+  const issuesForStep = (index: number): string[] =>
+    allIssues.filter((item) => item.step === index).map((item) => item.text);
 
   const handleFile = async (file: File): Promise<void> => {
     setUploading(true);
@@ -142,6 +185,15 @@ export default function NewApp() {
   };
 
   const submit = async (): Promise<void> => {
+    // Antes de chamar a API, explica tudo que está impedindo a criação — a
+    // resposta do servidor continua como rede de segurança (ex.: imagem fora
+    // da lista de permissões, que só o backend conhece).
+    const blocking = allIssues.map((item) => item.text);
+    if (blocking.length > 0) {
+      setAttempted(true);
+      toast.error(blocking.length === 1 ? blocking[0]! : t("errors.composite.headline"));
+      return;
+    }
     setSubmitting(true);
     setSubmitError(null);
     try {
@@ -169,16 +221,16 @@ export default function NewApp() {
 
       const slug = created.app.slug;
       if (!upload) {
-        toast.success("Aplicação criada. Publique o código quando quiser.");
+        toast.success(t("newApp.created.noCode"));
         navigate(`/apps/${slug}`);
         return;
       }
 
-      const started = await api.deploy(slug, upload.upload.id, "Versão inicial");
+      const started = await api.deploy(slug, upload.upload.id, t("newApp.versionLabel"));
       setCreatedSlug(slug);
       setDeploymentId(started.deploymentId);
     } catch (caught) {
-      const message = errorText(caught);
+      const message = errorTextRich(caught);
       setSubmitError(message);
       toast.error(message);
     } finally {
@@ -186,20 +238,32 @@ export default function NewApp() {
     }
   };
 
-  const canContinue = step === 0 ? name.trim().length >= 2 : true;
+  /** Avança de etapa só depois de explicar os problemas da etapa atual. */
+  const goTo = (next: number): void => {
+    const found = issuesForStep(step);
+    if (found.length > 0) {
+      setAttempted(true);
+      toast.error(found.length === 1 ? found[0]! : t("errors.composite.headline"));
+      return;
+    }
+    setAttempted(false);
+    setStep(next);
+  };
+
+  const canContinue = step === 0 ? name.trim().length >= 2 && !nameProblem(name) : issuesForStep(step).length === 0;
   const creating = deploy.status === "running" && deploymentId !== null;
   const deployFailed = deploy.status === "failed";
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
       <PageHeader
-        title="Nova aplicação"
+        title={t("nav.newApp")}
         icon={<IconPlus className="h-4 w-4" />}
-        subtitle="Envie o ZIP do projeto, confirme como ele deve rodar e o painel cria o container, instala as dependências e publica a primeira versão."
+        subtitle={t("newApp.subtitle")}
         actions={
           <Link to="/apps">
             <Button variant="ghost" disabled={creating}>
-              Cancelar
+              {t("common.cancel")}
             </Button>
           </Link>
         }
@@ -207,11 +271,11 @@ export default function NewApp() {
 
       {/* Passos do assistente, com o progresso visível a cada etapa. */}
       <ol className="card flex flex-wrap items-center gap-1 p-2">
-        {STEPS.map((label, index) => {
+        {STEP_KEYS.map((stepKey, index) => {
           const done = index < step;
           const current = index === step;
           return (
-            <li key={label} className="flex items-center gap-1">
+            <li key={stepKey} className="flex items-center gap-1">
               {index > 0 ? (
                 <span
                   aria-hidden="true"
@@ -241,7 +305,7 @@ export default function NewApp() {
                 >
                   {done ? <IconCheck className="h-3 w-3" /> : index + 1}
                 </span>
-                {label}
+                {t(stepKey)}
               </button>
             </li>
           );
@@ -249,30 +313,37 @@ export default function NewApp() {
       </ol>
 
       {step === 0 ? (
-        <Card title="Código da aplicação" subtitle="ZIP com o projeto (uma pasta raiz no pacote é removida automaticamente)">
+        <Card title={t("newApp.code.title")} subtitle={t("newApp.code.hint")}>
           <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Nome da aplicação" hint="Aparece no painel e define o identificador (slug).">
+              <Field label={t("newApp.name")} hint={t("newApp.name.hint")}>
                 <Input value={name} onChange={(event) => setName(event.target.value)} placeholder="Meu Bot" autoFocus />
               </Field>
-              <Field label="Descrição (opcional)">
+              <Field label={t("newApp.description")}>
                 <Input
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
-                  placeholder="Bot de moderação do servidor X"
+                  placeholder={t("config.description.placeholder")}
                 />
               </Field>
               <Field
-                label="URL do ícone (opcional)"
+                label={t("newApp.iconUrl")}
                 className="sm:col-span-2"
-                hint="Link http(s) de uma imagem (ex.: o avatar do bot no Discord). Pode mudar depois."
+                hint={t("newApp.iconUrl.hint")}
               >
-                <div className="flex items-center gap-3">
+                <div className="flex flex-wrap items-center gap-4">
                   <AppIcon app={{ name: name || "?", iconUrl, runtime }} size="md" />
                   <Input
                     value={iconUrl}
                     onChange={(event) => setIconUrl(event.target.value)}
                     placeholder="https://cdn.exemplo.com/icone.png"
+                    className="max-w-md"
+                  />
+                  <ImageUpload
+                    value={iconUrl}
+                    onChange={setIconUrl}
+                    label={t("imageUpload.orUpload")}
+                    size={44}
                   />
                 </div>
               </Field>
@@ -309,24 +380,24 @@ export default function NewApp() {
               {uploading ? (
                 <div className="space-y-2">
                   <p className="flex items-center justify-center gap-2 text-sm text-slate-300">
-                    <Spinner className="h-4 w-4" /> Enviando ZIP… {uploadPercent}%
+                    <Spinner className="h-4 w-4" /> {t("newApp.uploading", { percent: uploadPercent })}
                   </p>
                   <ProgressBar percent={uploadPercent} />
-                  <p className="text-[11px] text-slate-500">{humanBytes(uploadBytes)} enviados</p>
+                  <p className="text-[11px] text-slate-500">
+                    {t("newApp.uploaded", { value: humanBytes(uploadBytes) })}
+                  </p>
                 </div>
               ) : (
                 <>
                   <span className="icon-tile icon-tile-lg mx-auto">
                     <IconUpload className="h-5 w-5" />
                   </span>
-                  <p className="mt-3 text-sm font-medium text-slate-200">Arraste o arquivo .zip aqui</p>
-                  <p className="mt-1 text-xs text-slate-500">ou</p>
+                  <p className="mt-3 text-sm font-medium text-slate-200">{t("newApp.drop.title")}</p>
+                  <p className="mt-1 text-xs text-slate-500">{t("newApp.drop.or")}</p>
                   <Button className="mt-2" onClick={() => fileInputRef.current?.click()}>
-                    Escolher arquivo
+                    {t("newApp.drop.choose")}
                   </Button>
-                  <p className="mt-3 text-[11px] text-slate-500">
-                    Você também pode criar a aplicação sem código e enviar a primeira versão depois.
-                  </p>
+                  <p className="mt-3 text-[11px] text-slate-500">{t("newApp.drop.note")}</p>
                 </>
               )}
             </div>
@@ -340,19 +411,26 @@ export default function NewApp() {
                     <IconCheck className="h-3 w-3" /> {upload.upload.fileName}
                   </Badge>
                   <Badge>
-                    {humanBytes(upload.upload.sizeBytes)} · {upload.upload.fileCount} arquivo(s)
+                    {humanBytes(upload.upload.sizeBytes)} · {t("newApp.detected.files", { count: upload.upload.fileCount })}
                   </Badge>
-                  <Badge tone="indigo">runtime detectado: {runtimeLabel(detection.runtime)}</Badge>
-                  {detection.entry ? <Badge>arquivo principal: {detection.entry}</Badge> : null}
-                  {detection.depsFile ? <Badge>dependências: {detection.depsFile}</Badge> : null}
+                  <Badge tone="indigo">
+                    {t("newApp.detected.runtime", { value: runtimeLabel(detection.runtime) })}
+                  </Badge>
+                  {detection.entry ? (
+                    <Badge>{t("newApp.detected.entry", { value: detection.entry })}</Badge>
+                  ) : null}
+                  {detection.depsFile ? (
+                    <Badge>{t("newApp.detected.deps", { value: detection.depsFile })}</Badge>
+                  ) : null}
                   <Button size="sm" variant="ghost" onClick={() => fileInputRef.current?.click()}>
-                    trocar arquivo
+                    {t("newApp.detected.change")}
                   </Button>
                 </div>
 
                 {detection.presentFiles.length > 0 ? (
                   <p className="text-[11px] text-slate-500">
-                    Arquivos-chave: <span className="font-mono">{detection.presentFiles.slice(0, 8).join(", ")}</span>
+                    {t("newApp.detected.keyFiles")}{" "}
+                    <span className="font-mono">{detection.presentFiles.slice(0, 8).join(", ")}</span>
                   </p>
                 ) : null}
 
@@ -371,16 +449,16 @@ export default function NewApp() {
 
       {step === 1 ? (
         <Card
-          title="Como executar"
+          title={t("newApp.run.title")}
           subtitle={
             detection
-              ? `Preenchido a partir da detecção automática do pacote enviado (runtime ${runtimeLabel(detection.runtime)})`
-              : "Ajuste os comandos que o painel vai executar"
+              ? t("newApp.run.detected", { value: runtimeLabel(detection.runtime) })
+              : t("newApp.run.manual")
           }
         >
           <div className="space-y-4">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Runtime" hint="Define a imagem Docker e os comandos padrão.">
+              <Field label={t("config.runtime")} hint={t("newApp.runtime.hint")}>
                 <Select value={runtime} onChange={(event) => applyRuntime(event.target.value as RuntimeKind)}>
                   {(Object.keys(PRESETS) as RuntimeKind[]).map((kind) => (
                     <option key={kind} value={kind}>
@@ -389,20 +467,20 @@ export default function NewApp() {
                   ))}
                 </Select>
               </Field>
-              <Field label="Imagem Docker" hint="Ex.: node:22-slim, python:3.12-slim, denoland/deno:latest">
+              <Field label={t("config.image")} hint={t("config.image.hint")}>
                 <Input value={image} onChange={(event) => setImage(event.target.value)} />
               </Field>
-              <Field label="Arquivo principal" hint="Relativo à raiz do projeto. Ex.: index.js ou src/bot.py">
+              <Field label={t("config.entry")} hint={t("config.entry.hint")}>
                 <Input value={entry} onChange={(event) => setEntry(event.target.value)} placeholder="index.js" />
               </Field>
-              <Field label="Arquivo de dependências" hint="Vazio desativa a instalação automática.">
+              <Field label={t("config.depsFile")} hint={t("config.depsFile.hint")}>
                 <Input value={depsFile} onChange={(event) => setDepsFile(event.target.value)} placeholder="package.json" />
               </Field>
             </div>
 
             <Field
-              label="Comando de instalação (opcional)"
-              hint="Vazio usa o instalador do runtime quando o arquivo de dependências existir."
+              label={t("newApp.installCommand")}
+              hint={t("config.installCommand.hint")}
             >
               <Input
                 value={installCommand}
@@ -413,8 +491,8 @@ export default function NewApp() {
             </Field>
 
             <Field
-              label="Comando de start (opcional)"
-              hint={runtime === "custom" ? "Obrigatório no runtime livre." : "Vazio usa o arquivo principal (ex.: node index.js)."}
+              label={t("newApp.startCommand")}
+              hint={runtime === "custom" ? t("newApp.startCommand.hint.custom") : t("config.startCommand.hint")}
             >
               <Input
                 value={startCommand}
@@ -424,20 +502,27 @@ export default function NewApp() {
               />
             </Field>
 
+            {(() => {
+              const imageIssue = imageProblem(image);
+              return imageIssue ? (
+                <Alert tone="red">{t(`errors.${imageIssue.code}`, imageIssue.params)}</Alert>
+              ) : null;
+            })()}
             {runtime === "custom" ? (
-              <Alert tone="amber">
-                No runtime livre você é responsável pela imagem, pelo comando de instalação e pelo comando de start.
-              </Alert>
+              <Alert tone="amber">{t("newApp.custom.alert")}</Alert>
             ) : null}
           </div>
         </Card>
       ) : null}
 
       {step === 2 ? (
-        <Card title="Recursos e configuração" subtitle="Limites aplicados por cgroup, por aplicação">
+        <Card title={t("newApp.resources.title")} subtitle={t("newApp.resources.hint")}>
           <div className="space-y-5">
             <div className="grid gap-4 sm:grid-cols-2">
-              <Field label="Memória máxima" hint={`${humanRam(memoryMb)} — o container é encerrado se estourar.`}>
+              <Field
+                label={t("config.memory")}
+                hint={t("newApp.memory.hint", { value: humanRam(memoryMb) })}
+              >
                 <div className="flex flex-wrap gap-2">
                   <Input
                     type="number"
@@ -453,7 +538,7 @@ export default function NewApp() {
                     onChange={(event) => event.target.value !== "custom" && setMemoryMb(Number(event.target.value))}
                     className="w-auto"
                   >
-                    <option value="custom">escolher…</option>
+                    <option value="custom">{t("common.choose")}</option>
                     {MEMORY_PRESETS.map((preset) => (
                       <option key={preset} value={preset}>
                         {humanRam(preset)}
@@ -463,7 +548,7 @@ export default function NewApp() {
                 </div>
               </Field>
 
-              <Field label="CPU" hint={`${humanCpu(cpu)} — 1 vCPU equivale a um núcleo inteiro.`}>
+              <Field label={t("metric.cpu")} hint={t("newApp.cpu.hint", { value: humanCpu(cpu) })}>
                 <div className="flex flex-wrap gap-2">
                   <Input
                     type="number"
@@ -479,7 +564,7 @@ export default function NewApp() {
                     onChange={(event) => event.target.value !== "custom" && setCpu(Number(event.target.value))}
                     className="w-auto"
                   >
-                    <option value="custom">escolher…</option>
+                    <option value="custom">{t("common.choose")}</option>
                     {CPU_PRESETS.map((preset) => (
                       <option key={preset} value={preset}>
                         {humanCpu(preset)}
@@ -489,7 +574,7 @@ export default function NewApp() {
                 </div>
               </Field>
 
-              <Field label="Limite de processos" hint="Protege a VPS contra fork bombs.">
+              <Field label={t("config.pids")} hint={t("newApp.pids.hint")}>
                 <Input
                   type="number"
                   min={32}
@@ -500,14 +585,23 @@ export default function NewApp() {
                 />
               </Field>
 
-              <Field label="Portas publicadas (opcional)" hint="Formato portaHost:portaContainer.">
+              <Field label={t("newApp.ports")} hint={t("newApp.ports.hint")}>
                 <Input value={ports} onChange={(event) => setPorts(event.target.value)} placeholder="8080:3000" />
               </Field>
             </div>
 
             <div>
-              <p className="mb-2 text-xs font-medium text-slate-300">Variáveis de ambiente</p>
+              <p className="mb-2 text-xs font-medium text-slate-300">{t("config.card.env")}</p>
               <EnvEditor value={env} onChange={setEnv} />
+              {envIssues(env).length > 0 ? (
+                <Alert tone="red">
+                  <ul className="list-inside list-disc space-y-1">
+                    {translateIssues(envIssues(env), t).map((message) => (
+                      <li key={message}>{message}</li>
+                    ))}
+                  </ul>
+                </Alert>
+              ) : null}
             </div>
 
             <div className="grid gap-4 sm:grid-cols-2">
@@ -516,10 +610,8 @@ export default function NewApp() {
                 onChange={setAutoStart}
                 label={
                   <span>
-                    Iniciar junto com o sistema
-                    <span className="block text-[11px] text-slate-500">
-                      Sobe sozinha quando a VPS (ou o painel) reiniciar.
-                    </span>
+                    {t("config.autoStart")}
+                    <span className="block text-[11px] text-slate-500">{t("newApp.autoStart.hint")}</span>
                   </span>
                 }
               />
@@ -529,91 +621,101 @@ export default function NewApp() {
                 onChange={setAutoRestart}
                 label={
                   <span>
-                    Reiniciar automaticamente
-                    <span className="block text-[11px] text-slate-500">
-                      Quando o bot cair com erro, o Docker sobe ele de novo sozinho.
-                    </span>
+                    {t("config.autoRestart")}
+                    <span className="block text-[11px] text-slate-500">{t("newApp.autoRestart.hint")}</span>
                   </span>
                 }
               />
             </div>
 
             <Alert tone="slate">
-              Os dados persistentes ficam em <InlineCode>/data</InlineCode> dentro do container, fora do código. Publicar
-              uma nova versão nunca apaga esse diretório.
+              {t("newApp.data.alert.before")} <InlineCode>/data</InlineCode> {t("newApp.data.alert.after")}
             </Alert>
           </div>
         </Card>
       ) : null}
 
       {step === 3 ? (
-        <Card title="Revisar e criar" subtitle="Confira antes de criar a aplicação">
+        <Card title={t("newApp.review.title")} subtitle={t("newApp.review.hint")}>
           <div className="space-y-4 text-xs">
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
-                <p className="text-slate-500">Aplicação</p>
+                <p className="text-slate-500">{t("newApp.review.app")}</p>
                 <p className="text-slate-200">{name || "—"}</p>
                 {description ? <p className="text-[11px] text-slate-500">{description}</p> : null}
               </div>
               <div>
-                <p className="text-slate-500">Ícone</p>
+                <p className="text-slate-500">{t("newApp.review.icon")}</p>
                 {iconUrl.trim() ? (
                   <p className="break-all font-mono text-slate-200">{iconUrl.trim()}</p>
                 ) : (
-                  <p className="text-slate-200">iniciais do nome</p>
+                  <p className="text-slate-200">{t("newApp.review.iconInitials")}</p>
                 )}
               </div>
               <div>
-                <p className="text-slate-500">Código</p>
+                <p className="text-slate-500">{t("newApp.review.code")}</p>
                 <p className="text-slate-200">
-                  {upload ? `${upload.upload.fileName} (${humanBytes(upload.upload.sizeBytes)})` : "sem código — publicar depois"}
+                  {upload
+                    ? `${upload.upload.fileName} (${humanBytes(upload.upload.sizeBytes)})`
+                    : t("newApp.review.noCode")}
                 </p>
               </div>
               <div>
-                <p className="text-slate-500">Runtime</p>
+                <p className="text-slate-500">{t("config.runtime")}</p>
                 <p className="text-slate-200">
                   {runtimeLabel(runtime)} <span className="font-mono text-[11px] text-slate-500">{image}</span>
                 </p>
               </div>
               <div>
-                <p className="text-slate-500">Arquivo principal</p>
-                <p className="font-mono text-slate-200">{entry || "definido pelo comando de start"}</p>
+                <p className="text-slate-500">{t("config.entry")}</p>
+                <p className="font-mono text-slate-200">{entry || t("newApp.review.entryPlaceholder")}</p>
               </div>
               <div>
-                <p className="text-slate-500">Dependências</p>
-                <p className="font-mono text-slate-200">{depsFile || "nenhuma instalação automática"}</p>
+                <p className="text-slate-500">{t("config.depsFile")}</p>
+                <p className="font-mono text-slate-200">{depsFile || t("newApp.review.noDeps")}</p>
               </div>
               <div>
-                <p className="text-slate-500">Recursos</p>
+                <p className="text-slate-500">{t("newApp.step.resources")}</p>
                 <p className="text-slate-200">
-                  {humanRam(memoryMb)} de RAM · {humanCpu(cpu)} · {pidsLimit} processos
+                  {t("newApp.review.resources.value", {
+                    ram: humanRam(memoryMb),
+                    cpu: humanCpu(cpu),
+                    pids: pidsLimit,
+                  })}
                 </p>
               </div>
               <div>
-                <p className="text-slate-500">Variáveis e portas</p>
+                <p className="text-slate-500">{t("newApp.review.envPorts")}</p>
                 <p className="text-slate-200">
-                  {env.filter((item) => item.key.trim()).length} variável(is) · {ports.trim() || "nenhuma porta"}
+                  {t("newApp.review.envPorts.value", {
+                    count: env.filter((item) => item.key.trim()).length,
+                    ports: ports.trim() || t("newApp.review.noPorts"),
+                  })}
                 </p>
               </div>
               <div>
-                <p className="text-slate-500">Início junto com o sistema</p>
-                <p className="text-slate-200">{autoStart ? "ativado" : "desativado"}</p>
+                <p className="text-slate-500">{t("newApp.review.autoStart")}</p>
+                <p className="text-slate-200">
+                  {autoStart ? t("system.env.enabled") : t("system.env.disabled")}
+                </p>
               </div>
               <div>
-                <p className="text-slate-500">Reinício automático</p>
-                <p className="text-slate-200">{autoRestart ? "ativado" : "desativado"}</p>
+                <p className="text-slate-500">{t("newApp.review.autoRestart")}</p>
+                <p className="text-slate-200">
+                  {autoRestart ? t("system.env.enabled") : t("system.env.disabled")}
+                </p>
               </div>
             </div>
 
             {installCommand ? (
               <div>
-                <p className="text-slate-500">Comando de instalação</p>
+                <p className="text-slate-500">{t("config.installCommand")}</p>
                 <p className="break-all font-mono text-slate-200">{installCommand}</p>
               </div>
             ) : null}
             {startCommand ? (
               <div>
-                <p className="text-slate-500">Comando de start</p>
+                <p className="text-slate-500">{t("config.startCommand")}</p>
                 <p className="break-all font-mono text-slate-200">{startCommand}</p>
               </div>
             ) : null}
@@ -621,15 +723,23 @@ export default function NewApp() {
         </Card>
       ) : null}
 
+      {attempted && issuesForStep(step).length > 0 ? (
+        <Alert tone="red">
+          <ul className="list-inside list-disc space-y-1">
+            {issuesForStep(step).map((issue) => (
+              <li key={issue}>{issue}</li>
+            ))}
+          </ul>
+        </Alert>
+      ) : null}
+
       {submitError ? <Alert tone="red">{submitError}</Alert> : null}
 
       {deploymentId !== null ? (
         <Card
-          title={deployFailed ? "A publicação falhou" : "Publicando a primeira versão"}
+          title={deployFailed ? t("newApp.deploy.title.failed") : t("newApp.deploy.title.running")}
           subtitle={
-            deployFailed
-              ? "A aplicação existe, mas ficou sem versão ativa. Publique novamente pela aba Versões."
-              : "Acompanhe as etapas reais informadas pelo backend"
+            deployFailed ? t("newApp.deploy.subtitle.failed") : t("newApp.deploy.subtitle.running")
           }
         >
           <DeployProgress
@@ -638,28 +748,27 @@ export default function NewApp() {
             failed={deployFailed}
             extra={
               deployFailed ? (
-                <Alert tone="amber">
-                  O código anterior não existe (primeira publicação), então a aplicação ficou criada mas parada. Corrija o
-                  problema no ZIP e publique de novo — nada foi apagado.
-                </Alert>
+                <Alert tone="amber">{t("newApp.deploy.failAlert")}</Alert>
               ) : null
             }
           />
           <pre className="terminal mt-3 max-h-64 overflow-auto rounded-lg border border-white/8 bg-slate-950 p-3 whitespace-pre-wrap text-slate-300">
-            {deploy.log || "aguardando o início do deploy…"}
+            {deploy.log || t("deploy.waiting")}
           </pre>
           {deploy.finished ? (
             <div className="mt-3 flex flex-wrap gap-2">
               {deployFailed ? (
                 <>
                   <Button variant="primary" onClick={() => setDeploymentId(null)}>
-                    Tentar novamente
+                    {t("errors.page.retry")}
                   </Button>
-                  <Button onClick={() => createdSlug && navigate(`/apps/${createdSlug}`)}>Ir para a aplicação</Button>
+                  <Button onClick={() => createdSlug && navigate(`/apps/${createdSlug}`)}>
+                    {t("newApp.goToApp")}
+                  </Button>
                 </>
               ) : (
                 <Button variant="primary" onClick={() => createdSlug && navigate(`/apps/${createdSlug}`)}>
-                  Abrir aplicação
+                  {t("newApp.openApp")}
                 </Button>
               )}
             </div>
@@ -669,11 +778,11 @@ export default function NewApp() {
 
       <div className="flex items-center justify-between gap-3">
         <Button variant="ghost" onClick={() => setStep((current) => Math.max(0, current - 1))} disabled={step === 0 || creating}>
-          ← Voltar
+          {t("newApp.back")}
         </Button>
-        {step < STEPS.length - 1 ? (
-          <Button variant="primary" onClick={() => setStep((current) => current + 1)} disabled={!canContinue || creating}>
-            Continuar →
+        {step < STEP_KEYS.length - 1 ? (
+          <Button variant="primary" onClick={() => goTo(step + 1)} disabled={!canContinue || creating}>
+            {t("newApp.continue")}
           </Button>
         ) : (
           <Button
@@ -682,7 +791,7 @@ export default function NewApp() {
             onClick={() => void submit()}
             disabled={name.trim().length < 2 || creating || deployFailed}
           >
-            {upload ? "Criar e publicar" : "Criar aplicação"}
+            {upload ? t("newApp.createAndPublish") : t("newApp.create")}
           </Button>
         )}
       </div>

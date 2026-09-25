@@ -3,6 +3,7 @@ import { z } from "zod";
 import { SESSION_COOKIE, createSessionToken, verifySessionToken } from "../auth.ts";
 import type { AppContext } from "../context.ts";
 import { UnauthorizedError } from "../errors.ts";
+import { effectivePanelName } from "./branding.ts";
 import { parseInput } from "./validation.ts";
 
 const loginSchema = z.object({ password: z.string().min(1).max(512) });
@@ -55,7 +56,7 @@ export function registerAuthRoutes(server: FastifyInstance, context: AppContext)
       reply.code(401);
       return { authenticated: false };
     }
-    return { authenticated: true, panelName: context.config.panelName };
+    return { authenticated: true, panelName: effectivePanelName(context) };
   });
 
 }

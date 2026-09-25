@@ -5,6 +5,7 @@ import type { AiSettings } from "../types.ts";
 import { Alert, Badge, Button, Card, Field, InlineCode, Input, Select, Skeleton, Toggle, cn } from "./ui.tsx";
 import { IconAlert, IconCheck, IconRefresh, IconSparkles } from "./icons.tsx";
 import { useToast } from "./Toasts.tsx";
+import { useI18n } from "../i18n/index.tsx";
 
 const MAX_LINES_PRESETS = [80, 200, 500, 1000];
 
@@ -15,6 +16,7 @@ const MAX_LINES_PRESETS = [80, 200, 500, 1000];
  * clicar em testar ou analisar.
  */
 export default function AiSettingsCard() {
+  const { t } = useI18n();
   const toast = useToast();
   const state = useAsync(() => api.aiSettings(), []);
 
@@ -108,7 +110,7 @@ export default function AiSettingsCard() {
 
   if (state.loading && !settings) {
     return (
-      <Card title="Análise de logs com IA">
+      <Card title={t("ai.card.title")}>
         <div className="space-y-3">
           <Skeleton className="h-4 w-56" />
           <Skeleton className="h-9 w-full" />
@@ -120,8 +122,8 @@ export default function AiSettingsCard() {
 
   if (!settings) {
     return (
-      <Card title="Análise de logs com IA">
-        <Alert tone="red">{state.error ?? "Não foi possível carregar a configuração de IA."}</Alert>
+      <Card title={t("ai.card.title")}>
+        <Alert tone="red">{state.error ?? t("ai.loadFailed")}</Alert>
       </Card>
     );
   }
@@ -160,7 +162,7 @@ export default function AiSettingsCard() {
       // da chave); `loaded` volta a false para a tela refletir o que foi salvo.
       setLoaded(false);
       state.setData({ settings: result.settings, providers });
-      toast.success("Configuração de IA salva.");
+      toast.success(t("ai.saved"));
       // Com a chave salva, confere na hora se o modelo escolhido existe na conta:
       // é o erro mais comum ("o modelo não existe ou você não tem acesso a ele").
       if (result.settings.apiKeySet) {
@@ -209,20 +211,18 @@ export default function AiSettingsCard() {
 
   return (
     <Card
-      title="Análise de logs com IA"
-      subtitle="Use a sua própria chave de um provedor de IA para explicar erros nos logs"
+      title={t("ai.card.title")}
+      subtitle={t("ai.card.hint")}
       actions={
         <Badge tone={enabled ? "green" : "slate"}>
-          {enabled ? "ativada" : "desativada"}
+          {enabled ? t("ai.card.enabled") : t("ai.card.disabled")}
         </Badge>
       }
     >
       <div className="space-y-5">
         <Alert tone="amber" icon={<IconAlert className="h-3.5 w-3.5" />}>
-          Ao analisar, o trecho de log escolhido <strong>sai desta VPS</strong> e é enviado ao provedor que você
-          configurar. Credenciais óbvias (tokens, chaves, senhas e JWTs) são mascaradas antes do envio, mas revise o
-          texto: os logs podem conter dados que você não quer compartilhar. A chave fica guardada no banco local do
-          painel e <strong>nunca</strong> é devolvida pela API.
+          {t("ai.privacy.before")} <strong>{t("ai.privacy.strong1")}</strong>{" "}
+          {t("ai.privacy.after")} <strong>{t("ai.privacy.strong2")}</strong> {t("ai.privacy.tail")}
         </Alert>
 
         <Toggle
@@ -230,16 +230,14 @@ export default function AiSettingsCard() {
           onChange={setEnabled}
           label={
             <span>
-              Habilitar a análise com IA
-              <span className="block text-[11px] text-slate-500">
-                Enquanto desativada, o botão “Analisar com IA” fica oculto na aba de logs.
-              </span>
+              {t("ai.enable")}
+              <span className="block text-[11px] text-slate-500">{t("ai.enable.hint")}</span>
             </span>
           }
         />
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <Field label="Provedor" hint="Cada provedor tem o seu formato de API e a sua chave.">
+          <Field label={t("ai.provider")} hint={t("ai.provider.hint")}>
             <Select value={providerId} onChange={(event) => selectProvider(event.target.value)}>
               {providers.map((item) => (
                 <option key={item.id} value={item.id}>
@@ -249,16 +247,13 @@ export default function AiSettingsCard() {
             </Select>
           </Field>
 
-          <Field
-            label="Modelo"
-            hint="Clique em “buscar modelos” para ver os nomes que a sua chave alcança — o catálogo muda com o tempo."
-          >
+          <Field label={t("ai.model")} hint={t("ai.model.hint")}>
             <div className="flex flex-wrap gap-2">
               <Input
                 value={model}
                 list="botpanel-ai-models"
                 onChange={(event) => setModel(event.target.value)}
-                placeholder={provider?.defaultModel ?? "nome-do-modelo"}
+                placeholder={provider?.defaultModel ?? t("ai.model.placeholder")}
                 className="min-w-40 flex-1"
               />
               <datalist id="botpanel-ai-models">
@@ -270,21 +265,21 @@ export default function AiSettingsCard() {
                 size="sm"
                 loading={loadingModels}
                 onClick={() => void fetchModels()}
-                title="Pergunta ao provedor quais modelos a sua chave pode usar"
+                title={t("ai.fetchModels.title")}
               >
-                <IconRefresh className="h-3.5 w-3.5" /> buscar modelos
+                <IconRefresh className="h-3.5 w-3.5" /> {t("ai.fetchModels")}
               </Button>
             </div>
           </Field>
 
           <Field
-            label={`Chave de API (${provider?.keyLabel ?? "chave"})`}
+            label={t("ai.apiKey", { label: provider?.keyLabel ?? t("ai.apiKey.fallbackLabel") })}
             hint={
               apiKeySet
-                ? `Chave salva no servidor: ${apiKeyHint}. Deixe em branco para mantê-la.`
+                ? t("ai.apiKey.saved", { hint: apiKeyHint })
                 : provider?.requiresKey
-                  ? "Obrigatória para este provedor."
-                  : "Este provedor não exige chave."
+                  ? t("ai.apiKey.required")
+                  : t("ai.apiKey.notRequired")
             }
           >
             <div className="flex flex-wrap gap-2">
@@ -296,7 +291,7 @@ export default function AiSettingsCard() {
                   setApiKey(event.target.value);
                   setClearApiKey(false);
                 }}
-                placeholder={apiKeySet ? "•••••••• (salva)" : "cole a chave aqui"}
+                placeholder={apiKeySet ? t("ai.apiKey.placeholderSaved") : t("ai.apiKey.placeholder")}
                 className="min-w-40 flex-1"
               />
               {apiKeySet ? (
@@ -308,15 +303,15 @@ export default function AiSettingsCard() {
                     setApiKey("");
                   }}
                 >
-                  {clearApiKey ? "vai remover ✓" : "remover chave"}
+                  {clearApiKey ? t("ai.apiKey.clearPending") : t("ai.apiKey.clear")}
                 </Button>
               ) : null}
             </div>
           </Field>
 
           <Field
-            label="Quantas linhas enviar"
-            hint={`As últimas ${maxLines} linhas visíveis na tela. Menos linhas = resposta mais rápida e barata.`}
+            label={t("ai.maxLines")}
+            hint={t("ai.maxLines.hint", { count: maxLines })}
           >
             <div className="flex flex-wrap gap-2">
               <Input
@@ -333,10 +328,10 @@ export default function AiSettingsCard() {
                 onChange={(event) => event.target.value !== "custom" && setMaxLines(Number(event.target.value))}
                 className="w-auto"
               >
-                <option value="custom">escolher…</option>
+                <option value="custom">{t("common.choose")}</option>
                 {MAX_LINES_PRESETS.map((preset) => (
                   <option key={preset} value={preset}>
-                    {preset} linhas
+                    {t("ai.maxLines.option", { count: preset })}
                   </option>
                 ))}
               </Select>
@@ -345,13 +340,9 @@ export default function AiSettingsCard() {
 
           {provider?.customBaseUrl ? (
             <Field
-              label="URL base da API"
+              label={t("ai.baseUrl")}
               className="sm:col-span-2"
-              hint={
-                provider.keysUrl
-                  ? "Aponte para o seu servidor. Ex.: http://127.0.0.1:11434/v1 para o Ollama local."
-                  : "Endereço do serviço compatível com a API da OpenAI."
-              }
+              hint={provider.keysUrl ? t("ai.baseUrl.hint.custom") : t("ai.baseUrl.hint.openai")}
             >
               <Input
                 value={baseUrl}
@@ -362,7 +353,7 @@ export default function AiSettingsCard() {
             </Field>
           ) : null}
 
-          <Field label="Criatividade (temperatura)" hint="0 = respostas mais objetivas; 1 = mais criativas. Para diagnóstico, valores baixos funcionam melhor.">
+          <Field label={t("ai.temperature")} hint={t("ai.temperature.hint")}>
             <Input
               type="number"
               min={0}
@@ -377,9 +368,8 @@ export default function AiSettingsCard() {
 
         {modelMissing ? (
           <Alert tone="amber" icon={<IconAlert className="h-3.5 w-3.5" />}>
-            O modelo <span className="font-mono">{model.trim()}</span> não aparece na lista deste provedor. Escolha um da
-            lista abaixo (ou digite o nome exato) antes de salvar — é isso que causa o erro “o modelo não existe ou você
-            não tem acesso a ele”.
+            {t("ai.modelMissing.before")} <span className="font-mono">{model.trim()}</span>{" "}
+            {t("ai.modelMissing.after")}
           </Alert>
         ) : null}
 
@@ -393,14 +383,14 @@ export default function AiSettingsCard() {
           <div className="rounded-lg border border-white/10 bg-slate-950/40 p-3">
             <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-400">
               <span>
-                {isFromProvider ? "Modelos disponíveis na sua conta" : "Sugestões do painel"} — {modelOptions.length}{" "}
-                opção(ões)
+                {isFromProvider ? t("ai.models.available") : t("ai.models.suggestions")} —{" "}
+                {t("ai.models.count", { count: modelOptions.length })}
               </span>
               {modelOptions.length > 8 ? (
                 <Input
                   value={modelFilter}
                   onChange={(event) => setModelFilter(event.target.value)}
-                  placeholder="filtrar modelos…"
+                  placeholder={t("ai.models.filter")}
                   className="ml-auto w-44 py-1 text-xs"
                 />
               ) : null}
@@ -409,12 +399,12 @@ export default function AiSettingsCard() {
                 onClick={() => setShowModels(false)}
                 className="rounded-md px-2 py-1 text-[11px] transition hover:bg-white/5 hover:text-slate-200"
               >
-                ocultar
+                {t("ai.models.hide")}
               </button>
             </div>
 
             {filtered.length === 0 ? (
-              <p className="mt-2 text-[11px] text-slate-500">Nenhum modelo corresponde ao filtro.</p>
+              <p className="mt-2 text-[11px] text-slate-500">{t("ai.models.noMatch")}</p>
             ) : (
               <div className="mt-2 flex max-h-52 flex-wrap gap-1.5 overflow-y-auto">
                 {filtered.map((id) => (
@@ -440,8 +430,7 @@ export default function AiSettingsCard() {
           </div>
         ) : (
           <p className="text-[11px] text-slate-500">
-            Dica: use <strong>buscar modelos</strong> para preencher a lista com os modelos que a sua chave alcança — o
-            nome precisa ser exatamente o que o provedor oferece.
+            {t("ai.models.tip.before")} <strong>{t("ai.fetchModels")}</strong> {t("ai.models.tip.after")}
           </p>
         )}
 
@@ -457,10 +446,10 @@ export default function AiSettingsCard() {
 
         <div className="flex flex-wrap items-center gap-3">
           <Button variant="primary" loading={saving} onClick={() => void save()} disabled={model.trim().length === 0}>
-            <IconSparkles className="h-3.5 w-3.5" /> Salvar configuração
+            <IconSparkles className="h-3.5 w-3.5" /> {t("config.save")}
           </Button>
           <Button loading={testing} onClick={() => void test()}>
-            Testar conexão
+            {t("ai.test")}
           </Button>
           {provider?.keysUrl ? (
             <a
@@ -469,7 +458,7 @@ export default function AiSettingsCard() {
               rel="noreferrer noopener"
               className="text-[11px] text-indigo-300 hover:text-indigo-200"
             >
-              obter uma chave de {provider.label} ↗
+              {t("ai.keys.get", { provider: provider.label })}
             </a>
           ) : null}
           {provider?.docsUrl ? (
@@ -479,15 +468,14 @@ export default function AiSettingsCard() {
               rel="noreferrer noopener"
               className="text-[11px] text-slate-400 hover:text-slate-200"
             >
-              documentação ↗
+              {t("ai.docs")}
             </a>
           ) : null}
         </div>
 
         <p className="text-[11px] text-slate-500">
-          Para trocar de provedor depois, basta selecionar outro e salvar — a chave anterior não é reaproveitada, mesmo
-          quando os formatos são parecidos. A análise também aparece na aba <strong>Logs</strong> de cada aplicação, onde
-          o trecho enviado fica registrado em <InlineCode>/api/ai/analyses</InlineCode>.
+          {t("ai.footer.before")} <strong>{t("tabs.logs")}</strong> {t("ai.footer.after")}{" "}
+          <InlineCode>/api/ai/analyses</InlineCode>{t("ai.footer.tail")}
         </p>
       </div>
     </Card>

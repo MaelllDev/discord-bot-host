@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router-dom";
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 import { ToastProvider } from "../src/components/Toasts.tsx";
+import { I18nProvider } from "../src/i18n/index.tsx";
 import Dashboard from "../src/pages/Dashboard.tsx";
 import type { AppSummary, SystemInfo } from "../src/types.ts";
 
@@ -98,11 +99,13 @@ async function renderDashboard(): Promise<string> {
   roots.push({ root, container });
 
   const tree: ReactElement = (
-    <MemoryRouter>
-      <ToastProvider>
-        <Dashboard />
-      </ToastProvider>
-    </MemoryRouter>
+    <I18nProvider>
+      <MemoryRouter>
+        <ToastProvider>
+          <Dashboard />
+        </ToastProvider>
+      </MemoryRouter>
+    </I18nProvider>
   );
 
   await act(async () => {
@@ -117,6 +120,7 @@ async function renderDashboard(): Promise<string> {
 beforeEach(() => {
   roots = [];
   apps = [];
+  localStorage.setItem("botpanel-language", "pt-BR");
   vi.stubGlobal("fetch", async (input: RequestInfo | URL): Promise<Response> => {
     const url = String(input);
     if (url.startsWith("/api/apps")) return jsonResponse({ apps });

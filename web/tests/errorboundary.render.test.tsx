@@ -7,6 +7,7 @@ import { MemoryRouter } from "react-router-dom";
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 import RouteErrorBoundary from "../src/components/ErrorBoundary.tsx";
+import { I18nProvider } from "../src/i18n/index.tsx";
 
 let roots: { root: Root; container: HTMLElement }[] = [];
 
@@ -17,7 +18,11 @@ async function render(element: ReactElement): Promise<string> {
   const root = createRoot(container);
   roots.push({ root, container });
   await act(async () => {
-    root.render(<MemoryRouter initialEntries={["/settings"]}>{element}</MemoryRouter>);
+    root.render(
+      <I18nProvider>
+        <MemoryRouter initialEntries={["/settings"]}>{element}</MemoryRouter>
+      </I18nProvider>,
+    );
   });
   return container.textContent ?? "";
 }
@@ -28,6 +33,7 @@ function Boom(): ReactElement {
 
 beforeEach(() => {
   roots = [];
+  localStorage.setItem("botpanel-language", "pt-BR");
   // O React imprime o erro no console do navegador; aqui isso só polui a saída.
   vi.spyOn(console, "error").mockImplementation(() => undefined);
 });

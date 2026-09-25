@@ -8,6 +8,8 @@ import { createRoot, type Root } from "react-dom/client";
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 import { ToastProvider } from "../src/components/Toasts.tsx";
+import { I18nProvider } from "../src/i18n/index.tsx";
+import { BrandingProvider } from "../src/branding.tsx";
 import Settings from "../src/pages/Settings.tsx";
 import type { AiProviderInfo, AiSettings, SystemInfo } from "../src/types.ts";
 
@@ -23,7 +25,13 @@ async function renderPage(element: ReactElement): Promise<string> {
   roots.push({ root, container });
 
   await act(async () => {
-    root.render(<ToastProvider>{element}</ToastProvider>);
+    root.render(
+      <I18nProvider>
+        <BrandingProvider>
+          <ToastProvider>{element}</ToastProvider>
+        </BrandingProvider>
+      </I18nProvider>,
+    );
   });
   // Um ciclo extra para as respostas da API (promessas) assentarem.
   await act(async () => {
@@ -108,6 +116,7 @@ function jsonResponse(body: unknown): Response {
 
 beforeEach(() => {
   roots = [];
+  localStorage.setItem("botpanel-language", "pt-BR");
   vi.stubGlobal("fetch", async (input: RequestInfo | URL): Promise<Response> => {
     const url = String(input);
     if (url.startsWith("/api/system")) return jsonResponse(systemInfo);

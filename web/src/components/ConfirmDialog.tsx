@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import type { ReactNode } from "react";
+import { useI18n } from "../i18n/index.tsx";
 import { Alert, Button, Modal, Toggle } from "./ui.tsx";
 
 export interface ConfirmState {
@@ -24,6 +25,7 @@ export interface ConfirmState {
  * sozinho quando a ação termina sem erro.
  */
 export default function ConfirmDialog({ state, onClose }: { state: ConfirmState | null; onClose: () => void }) {
+  const { t } = useI18n();
   const [busy, setBusy] = useState(false);
   const [checked, setChecked] = useState(false);
 
@@ -54,10 +56,10 @@ export default function ConfirmDialog({ state, onClose }: { state: ConfirmState 
       footer={
         <>
           <Button variant="ghost" onClick={onClose} disabled={busy}>
-            Cancelar
+            {t("common.cancel")}
           </Button>
           <Button variant={state?.danger ? "danger" : "primary"} loading={busy} onClick={() => void confirm()}>
-            {state?.confirmLabel ?? "Confirmar"}
+            {state?.confirmLabel ?? t("common.confirm")}
           </Button>
         </>
       }
@@ -67,7 +69,7 @@ export default function ConfirmDialog({ state, onClose }: { state: ConfirmState 
         {state?.checkbox ? (
           <Toggle checked={checked} onChange={setChecked} label={state.checkbox.label} disabled={busy} />
         ) : null}
-        {state?.danger ? <Alert tone="red">Esta ação não pode ser desfeita.</Alert> : null}
+        {state?.danger ? <Alert tone="red">{t("common.irreversible")}</Alert> : null}
       </div>
     </Modal>
   );

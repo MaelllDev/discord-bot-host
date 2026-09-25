@@ -11,8 +11,10 @@ import { DockerService } from "./docker/service.ts";
 import { AppService } from "./apps/service.ts";
 import { FileService } from "./apps/files.ts";
 import { UploadStore } from "./apps/uploads.ts";
+import { ImageStore } from "./apps/images.ts";
 import { BackupService } from "./apps/backups.ts";
 import { AiService } from "./ai/service.ts";
+import { NotifyService, startStatusWatcher } from "./notify/webhooks.ts";
 import { LoginThrottle, resolvePasswordSource } from "./auth.ts";
 import { registerRoutes } from "./routes/index.ts";
 import { isAuthenticated } from "./routes/auth.ts";
@@ -24,6 +26,8 @@ import type { AppContext } from "./context.ts";
 
 /** Rotas que não exigem sessão. */
 const PUBLIC_ROUTES = new Set(["/api/health", "/api/auth/login", "/api/auth/logout", "/api/auth/session"]);
+/** GETs públicos adicionais (a mutação continua exigindo sessão). */
+const PUBLIC_GETS = new Set(["/api/branding"]);
 
 export interface BuiltServer {
   server: FastifyInstance;
@@ -40,9 +44,12 @@ export async function buildServer(config: PanelConfig): Promise<BuiltServer> {
   const apps = new AppService(config, store, docker);
   const files = new FileService(config, apps);
   const uploads = new UploadStore(config);
+  const images = new ImageStore(config);
   const backups = new BackupService(config, store);
   const ai = new AiService(store);
+  const notify = new NotifyService(store, () => config.panelName);
   await uploads.init();
+  await images.init();
   // Um backup interrompido por um restart ficaria marcado como "em execução"
   // para sempre; registrar a falha é mais honesto do que mostrar progresso falso.
   backups.recoverInterrupted();
@@ -58,6 +65,8 @@ export async function buildServer(config: PanelConfig): Promise<BuiltServer> {
     ai,
     files,
     uploads,
+    images,
+    notify,
     password: resolvePasswordSource(config),
     throttle: new LoginThrottle(),
     session: { epoch: Number.parseInt(store.getSetting("session_epoch") ?? "0", 10) || 0 },
@@ -88,10 +97,34 @@ export async function buildServer(config: PanelConfig): Promise<BuiltServer> {
     const path = (request.url.split("?")[0] ?? "").replace(/\/+$/, "") || "/";
     if (!path.startsWith("/api/")) return;
     if (PUBLIC_ROUTES.has(path)) return;
+    // Branding (nome/ícone do painel) é público em GET: a tela de login consulta
+    // antes de existir sessão. Gravação continua restrita ao admin.
+    if (request.method === "GET" && PUBLIC_GETS.has(path)) return;
     if (!isAuthenticated(request, context)) throw new UnauthorizedError();
   });
 
   registerRoutes(server, context);
+
+  // Observador de status: crash/recuperação sem ninguém com a página aberta.
+  startStatusWatcher(context);
+  // Ações manuais (start/stop/restart) avisam por conta própria, com o tipo
+  // exato, e marcam intenção para o observador não duplicar o aviso.
+  apps.onLifecycle = (kind, app) => void context.notify.dispatch(kind, app);
+  apps.onIntent = (slug) => context.notify.noteIntent(slug);
+
+  // Imagens enviadas (fotos dos bots, ícone do painel). Autenticado como a
+  // API: foto de bot pode ser tão sensível quanto os logs dele. Fica fora do
+  // bloco do frontend porque serve imagens mesmo sem build do painel.
+  server.get("/uploads/images/:file", async (request: FastifyRequest, reply: FastifyReply) => {
+    if (!isAuthenticated(request, context)) throw new UnauthorizedError();
+    const file = (request.params as { file: string }).file;
+    const bytes = context.images.read(file);
+    if (!bytes) return reply.code(404).send({ error: "Imagem não encontrada." });
+    const ext = file.split(".").pop() ?? "";
+    reply.header("cache-control", "private, max-age=86400");
+    reply.type(ext === "svg" ? "image/svg+xml" : `image/${ext === "jpg" ? "jpeg" : ext}`);
+    return reply.send(bytes);
+  });
 
   server.setErrorHandler((error: Error & { statusCode?: number }, request: FastifyRequest, reply: FastifyReply) => {
     // Daemon do Docker fora do ar não é erro de programa: a interface mostra a
@@ -114,6 +147,9 @@ export async function buildServer(config: PanelConfig): Promise<BuiltServer> {
     return reply.code(statusCode).send({
       error: errorMessage(error),
       details: error instanceof AppError ? error.details : undefined,
+      // Código estável para o painel traduzir (`errors.<code>`); segue ausente
+      // em erros que não o definem — aí o texto original é usado como está.
+      code: error instanceof AppError ? error.code : undefined,
     });
   });
 

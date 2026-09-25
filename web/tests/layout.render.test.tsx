@@ -9,6 +9,8 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 (globalThis as unknown as { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
 import Layout from "../src/components/Layout.tsx";
+import { I18nProvider } from "../src/i18n/index.tsx";
+import { BrandingProvider } from "../src/branding.tsx";
 import type { AppSummary, SystemInfo } from "../src/types.ts";
 
 let roots: { root: Root; container: HTMLElement }[] = [];
@@ -104,15 +106,19 @@ async function renderShell(path: string): Promise<string> {
   roots.push({ root, container });
 
   const tree: ReactElement = (
-    <MemoryRouter initialEntries={[path]}>
-      <Routes>
-        <Route element={<Layout onLogout={() => {}} />}>
-          <Route index element={<p>conteúdo do dashboard</p>} />
-          <Route path="apps/:slug" element={<p>conteúdo da aplicação</p>} />
-          <Route path="apps/new" element={<p>conteúdo de nova aplicação</p>} />
-        </Route>
-      </Routes>
-    </MemoryRouter>
+    <I18nProvider>
+      <BrandingProvider>
+        <MemoryRouter initialEntries={[path]}>
+          <Routes>
+            <Route element={<Layout onLogout={() => {}} />}>
+              <Route index element={<p>conteúdo do dashboard</p>} />
+              <Route path="apps/:slug" element={<p>conteúdo da aplicação</p>} />
+              <Route path="apps/new" element={<p>conteúdo de nova aplicação</p>} />
+            </Route>
+          </Routes>
+        </MemoryRouter>
+      </BrandingProvider>
+    </I18nProvider>
   );
 
   await act(async () => {
@@ -128,10 +134,14 @@ async function renderShell(path: string): Promise<string> {
 beforeEach(() => {
   roots = [];
   dockerAvailable = true;
+  // Idioma fixo: as asserções abaixo são em português (o idioma de origem).
+  localStorage.setItem("botpanel-language", "pt-BR");
   vi.stubGlobal("fetch", async (input: RequestInfo | URL): Promise<Response> => {
     const url = String(input);
     if (url.startsWith("/api/apps")) return jsonResponse({ apps: [app] });
     if (url.startsWith("/api/system")) return jsonResponse(systemInfo(dockerAvailable));
+    // A casca agora pega o nome do painel do /api/branding.
+    if (url.startsWith("/api/branding")) return jsonResponse({ branding: { name: "BotPanel Teste", iconUrl: "" } });
     throw new Error(`rota não esperada no teste: ${url}`);
   });
 });

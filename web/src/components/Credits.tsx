@@ -1,3 +1,4 @@
+import { useI18n } from "../i18n/index.tsx";
 import { cn } from "./ui.tsx";
 import { IconHeart } from "./icons.tsx";
 
@@ -37,12 +38,13 @@ export function SupportLink({
   /** Só o coração (sidebar minimizada), sem o texto. */
   iconOnly?: boolean;
 }) {
+  const { t } = useI18n();
   return (
     <a
       href={SUPPORT_URL}
       target="_blank"
       rel="noreferrer noopener"
-      title="Apoiar o projeto com qualquer valor (Pix)"
+      title={t("credits.support.title")}
       className={cn(
         "inline-flex w-full items-center justify-center gap-1.5 rounded-lg border border-amber-400/25 bg-amber-500/10 font-medium text-amber-100 transition hover:bg-amber-500/20",
         compact ? "px-2.5 py-2 text-[11px]" : "px-3.5 py-2 text-xs",
@@ -51,7 +53,7 @@ export function SupportLink({
       )}
     >
       <IconHeart className="h-3.5 w-3.5" />
-      <span className={cn(iconOnly && "lg:hidden")}>Apoie-nos</span>
+      <span className={cn(iconOnly && "lg:hidden")}>{t("credits.support.label")}</span>
     </a>
   );
 }
@@ -80,9 +82,10 @@ export function CreatorLinks({ className }: { className?: string }) {
 
 /** Linha compacta de crédito, para o rodapé da sidebar. */
 export function CreatorCredit({ className }: { className?: string }) {
+  const { t } = useI18n();
   return (
     <p className={cn("text-[10.5px] leading-relaxed text-slate-600", className)}>
-      Criado por{" "}
+      {t("credits.createdBy")}{" "}
       <a
         href={CREATOR.github}
         target="_blank"

@@ -10,6 +10,10 @@ before being published, so there is no earlier version history to import.
 
 ## [Unreleased]
 
+## [1.0.3] - 2026-09-25
+
+New features: custom panel branding (name and icon), image uploads for application icons, Discord webhook notifications for application lifecycle events with per-webhook customization, and bilingual interface (pt-BR/English). Improvements: richer validation messages with translated error codes, Docker image existence check before deployment, cleaner application detail page, fixed sidebar with collapse button, and a dedicated backups page.
+
 ## [1.0.2] - 2026-09-21
 
 ### Added
@@ -94,7 +98,8 @@ First public release.
 - Test suite: backend unit/integration tests, frontend render tests (jsdom) and a Docker
   end-to-end suite covering the full container lifecycle.
 
-[Unreleased]: https://github.com/MaelllDev/discord-bot-host/compare/v1.0.2...HEAD
+[Unreleased]: https://github.com/MaelllDev/discord-bot-host/compare/v1.0.3...HEAD
+[1.0.3]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.0.3
 [1.0.2]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.0.2
 [1.0.1]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.0.1
 [1.0.0]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.0.0

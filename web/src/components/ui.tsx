@@ -1,5 +1,6 @@
 import type { ButtonHTMLAttributes, ComponentPropsWithRef, ReactNode } from "react";
 import { statusLabel } from "../format.ts";
+import { useI18n } from "../i18n/index.tsx";
 import { IconAlert, IconCheck } from "./icons.tsx";
 
 export function cn(...parts: (string | false | null | undefined)[]): string {
@@ -445,6 +446,7 @@ export function Modal({
   footer?: ReactNode;
   wide?: boolean;
 }) {
+  const { t } = useI18n();
   if (!open) return null;
   return (
     <div
@@ -455,7 +457,7 @@ export function Modal({
       <div className={cn("card pop-in my-auto w-full", wide ? "max-w-3xl" : "max-w-xl")}>
         <header className="flex items-center justify-between gap-3 border-b border-white/8 px-5 py-3.5">
           <h2 className="min-w-0 truncate text-sm font-semibold tracking-tight text-slate-100">{title}</h2>
-          <Button variant="ghost" size="sm" onClick={onClose} aria-label="Fechar">
+          <Button variant="ghost" size="sm" onClick={onClose} aria-label={t("common.close")}>
             ✕
           </Button>
         </header>

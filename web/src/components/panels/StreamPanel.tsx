@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { AppStream } from "../../hooks.ts";
 import type { AppStatus } from "../../types.ts";
 import { statusLabel } from "../../format.ts";
+import { useI18n } from "../../i18n/index.tsx";
 import { Alert, Badge, Button, Input, Spinner, cn } from "../ui.tsx";
 import { IconDownload, IconRefresh, IconSparkles, IconTerminal, IconTrash } from "../icons.tsx";
 import AiAnalyzeDialog from "../AiAnalyzeDialog.tsx";
@@ -19,6 +20,7 @@ export default function StreamPanel({
   appStatus: AppStatus;
   appName: string;
 }) {
+  const { t } = useI18n();
   const [autoscroll, setAutoscroll] = useState(true);
   const [aiOpen, setAiOpen] = useState(false);
   const [filter, setFilter] = useState("");
@@ -82,26 +84,26 @@ export default function StreamPanel({
         <Alert tone={stream.reconnecting ? "amber" : "red"}>
           {stream.reconnecting ? (
             <span className="flex items-center gap-2">
-              <Spinner className="h-3.5 w-3.5" /> Conexão em tempo real caiu — tentando reconectar ao painel. O estado do
-              bot <strong>não</strong> é considerado parado por causa disso.
+              <Spinner className="h-3.5 w-3.5" /> {t("console.reconnecting.before")}{" "}
+              <strong>{t("console.not")}</strong> {t("console.reconnecting.after")}
             </span>
           ) : (
-            "Sem conexão em tempo real com o painel. Recarregue a página para abrir um novo canal."
+            t("console.noConnection")
           )}
         </Alert>
       ) : null}
 
       {stream.dockerUnavailable ? (
         <Alert tone="red">
-          O Docker está inacessível: o painel não consegue ler o estado real nem os logs desta aplicação agora. Isso
-          <strong> não</strong> significa que o bot está parado.
+          {t("console.dockerDown.before")}
+          <strong> {t("console.not")}</strong> {t("console.dockerDown.after")}
         </Alert>
       ) : null}
 
       {stream.connected && offline ? (
         <Alert tone="amber">
-          A aplicação está {statusLabel(appStatus).toLowerCase()}. Os logs abaixo são o histórico do container; use{" "}
-          <strong>Iniciar</strong> na visão geral para subir de novo.
+          {t("console.offline.before", { status: statusLabel(appStatus).toLowerCase() })}{" "}
+          <strong>{t("actions.start")}</strong> {t("console.offline.after")}
         </Alert>
       ) : null}
 
@@ -111,12 +113,16 @@ export default function StreamPanel({
             <span className="icon-tile icon-tile-sm icon-tile-neutral">
               <IconTerminal className="h-4 w-4" />
             </span>
-            {mode === "logs" ? "Logs em tempo real" : "Console (stdin)"}
+            {mode === "logs" ? t("console.titleLogs") : t("console.titleStdin")}
           </h2>
           <Badge tone={stream.connected ? "green" : stream.reconnecting ? "amber" : "red"}>
-            {stream.connected ? "conectado" : stream.reconnecting ? "reconectando" : "desconectado"}
+            {stream.connected
+              ? t("console.connected")
+              : stream.reconnecting
+                ? t("console.reconnecting")
+                : t("console.disconnected")}
           </Badge>
-          {stderrOnly > 0 ? <Badge tone="red">{stderrOnly} em stderr</Badge> : null}
+          {stderrOnly > 0 ? <Badge tone="red">{t("console.stderr", { count: stderrOnly })}</Badge> : null}
 
           <div className="ml-auto flex flex-wrap items-center gap-2">
             <button
@@ -129,35 +135,31 @@ export default function StreamPanel({
                   : "border-white/10 bg-white/[0.04] text-slate-400 hover:text-slate-200",
               )}
             >
-              auto-scroll {autoscroll ? "on" : "off"}
+              {t("console.autoScroll", { state: autoscroll ? t("common.on") : t("common.off") })}
             </button>
             <Input
               value={filter}
               onChange={(event) => setFilter(event.target.value)}
-              placeholder="filtrar…"
+              placeholder={t("console.filter")}
               className="w-28 py-1 text-xs sm:w-40"
             />
-            <Button size="sm" onClick={stream.refresh} disabled={!stream.connected} title="Reabre o stream de logs">
-              <IconRefresh className="h-3.5 w-3.5" /> recarregar
+            <Button size="sm" onClick={stream.refresh} disabled={!stream.connected} title={t("console.reload.title")}>
+              <IconRefresh className="h-3.5 w-3.5" /> {t("console.reload")}
             </Button>
-            <Button
-              size="sm"
-              onClick={stream.clear}
-              title="Limpa apenas a visualização — os logs reais do container continuam guardados"
-            >
-              <IconTrash className="h-3.5 w-3.5" /> limpar
+            <Button size="sm" onClick={stream.clear} title={t("console.clear.title")}>
+              <IconTrash className="h-3.5 w-3.5" /> {t("console.clear")}
             </Button>
             <Button size="sm" onClick={download}>
-              <IconDownload className="h-3.5 w-3.5" /> baixar
+              <IconDownload className="h-3.5 w-3.5" /> {t("console.download")}
             </Button>
             {mode === "logs" ? (
               <Button
                 size="sm"
                 variant="primary"
                 onClick={() => setAiOpen(true)}
-                title="Envia as últimas linhas desta tela para a IA configurada e explica o erro"
+                title={t("console.analyze.title")}
               >
-                <IconSparkles className="h-3.5 w-3.5" /> analisar com IA
+                <IconSparkles className="h-3.5 w-3.5" /> {t("console.analyze")}
               </Button>
             ) : null}
           </div>
@@ -174,16 +176,14 @@ export default function StreamPanel({
             {slug} · {mode === "logs" ? "stdout/stderr" : "stdin"}
           </span>
           <span className="ml-auto shrink-0 font-mono text-[10.5px] text-slate-500 tabular-nums">
-            {stream.lines.length} linhas
+            {t("console.lineCount", { count: stream.lines.length })}
           </span>
         </div>
 
         <div ref={containerRef} onScroll={onScroll} className="terminal flex-1 overflow-auto bg-slate-950/60 px-4 py-3">
           {lines.length === 0 ? (
             <p className="text-slate-500">
-              {mode === "logs"
-                ? "Sem saída ainda. Quando o processo escrever algo, as linhas aparecem aqui automaticamente."
-                : "Envie um comando abaixo para o stdin do processo principal."}
+              {mode === "logs" ? t("console.emptyLogs") : t("console.emptyStdin")}
             </p>
           ) : (
             lines.map((line) => (
@@ -215,7 +215,7 @@ export default function StreamPanel({
                 if (element) element.scrollTop = element.scrollHeight;
               }}
             >
-              ir para o fim ↓
+              {t("console.goToEnd")}
             </button>
           </div>
         ) : null}
@@ -223,9 +223,8 @@ export default function StreamPanel({
         {mode === "logs" ? (
           <footer className="border-t border-white/8 bg-slate-950/40 px-4 py-2.5">
             <p className="text-[11px] text-slate-500">
-              <strong>Analisar com IA</strong> envia as últimas linhas visíveis para o provedor configurado em{" "}
-              <span className="font-mono">Configurações</span>, com tokens e chaves mascarados. O trecho enviado fica
-              registrado com o resultado.
+              <strong>{t("console.analyze")}</strong> {t("console.aiHint.before")}{" "}
+              <span className="font-mono">{t("nav.settings")}</span>{t("console.aiHint.after")}
             </p>
           </footer>
         ) : null}
@@ -255,18 +254,19 @@ export default function StreamPanel({
                     recallHistory(1);
                   }
                 }}
-                placeholder={stream.connected ? "digite um comando e pressione Enter" : "sem conexão com o painel"}
+                placeholder={
+                  stream.connected ? t("console.commandPlaceholder") : t("console.noConnection.short")
+                }
                 className="font-mono text-xs"
                 disabled={!stream.connected}
               />
               <Button variant="primary" onClick={submitCommand} disabled={!stream.connected || command.trim().length === 0}>
-                Enviar
+                {t("console.send")}
               </Button>
             </div>
             <p className="mt-2 text-[11px] text-slate-500">
-              O texto vai para o stdin do processo principal do container (funciona quando o bot lê a entrada padrão).
-              Use ↑/↓ para o histórico. <strong>Limpar</strong> só apaga a tela; os logs do container permanecem salvos no
-              Docker.
+              {t("console.stdinHint.before")} <strong>{t("console.clear")}</strong>{" "}
+              {t("console.stdinHint.after")}
             </p>
           </footer>
         ) : null}

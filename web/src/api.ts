@@ -1,3 +1,4 @@
+import { tActive } from "./i18n/language.ts";
 import type {
   ActivityEvent,
   AiAnalysis,
@@ -21,12 +22,15 @@ import type {
 export class ApiError extends Error {
   readonly status: number;
   readonly details: unknown;
+  /** Código estável do erro (`image.notAllowed`, `slug.taken`, …), se houver. */
+  readonly code?: string;
 
-  constructor(message: string, status: number, details?: unknown) {
+  constructor(message: string, status: number, details?: unknown, code?: string) {
     super(message);
     this.name = "ApiError";
     this.status = status;
     this.details = details;
+    this.code = code;
   }
 }
 
@@ -79,20 +83,18 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
   try {
     response = await fetch(path, init);
   } catch (caught) {
-    throw new ApiError(
-      "Não foi possível falar com o painel. Verifique se o serviço está em execução.",
-      0,
-      caught,
-    );
+    throw new ApiError(tActive("api.unreachable"), 0, caught);
   }
 
   if (!response.ok) {
-    let message = `Erro ${response.status}`;
+    let message = tActive("api.errorStatus", { status: response.status });
     let details: unknown;
+    let code: string | undefined;
     try {
-      const payload = (await response.json()) as { error?: string; details?: unknown };
+      const payload = (await response.json()) as { error?: string; details?: unknown; code?: string };
       if (payload.error) message = payload.error;
       details = payload.details;
+      code = payload.code;
     } catch {
       // resposta sem JSON
     }
@@ -100,7 +102,7 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
       message = "Sessão expirada. Entre novamente.";
       notifyUnauthorized(path);
     }
-    throw new ApiError(message, response.status, details);
+    throw new ApiError(message, response.status, details, code);
   }
 
   if (response.status === 204) return undefined as T;
@@ -174,7 +176,7 @@ export function uploadZipWithProgress(
         try {
           resolve(JSON.parse(xhr.responseText) as UploadResult);
         } catch {
-          reject(new ApiError("Resposta inválida do painel ao enviar o pacote.", xhr.status));
+          reject(new ApiError(tActive("api.badUploadResponse"), xhr.status));
         }
         return;
       }
@@ -284,6 +286,77 @@ export const api = {
   },
   uploadZipWithProgress,
   discardUpload: (id: string) => request<{ ok: boolean }>(`/api/uploads/${id}`, { method: "DELETE" }),
+
+  branding: () => request<{ branding: { name: string; iconUrl: string } }>("/api/branding"),
+  saveBranding: (payload: { name?: string; iconUrl?: string }) =>
+    request<{ branding: { name: string; iconUrl: string } }>("/api/branding", { method: "PUT", body: payload }),
+
+  webhooks: () =>
+    request<{
+      webhooks: {
+        id: string;
+        name: string;
+        urlMasked: string;
+        events: string[];
+        enabled: boolean;
+        username?: string;
+        avatarUrl?: string;
+        messages?: Record<string, string>;
+        lastResult: { at: string; ok: boolean; error?: string } | null;
+      }[];
+      kinds: string[];
+    }>("/api/notify/webhooks"),
+  saveWebhooks: (
+    webhooks: {
+      id: string;
+      name: string;
+      url?: string;
+      events: string[];
+      enabled: boolean;
+      username?: string;
+      avatarUrl?: string;
+      messages?: Record<string, string>;
+    }[],
+  ) =>
+    request<{ ok: boolean }>("/api/notify/webhooks", { method: "PUT", body: { webhooks } }),
+  testWebhook: (url: string, extra?: { username?: string; avatarUrl?: string; message?: string }) =>
+    request<{ ok: boolean }>("/api/notify/test", { method: "POST", body: { url, ...extra } }),
+  /** Envia a imagem já recortada e devolve a URL servida por /uploads/images. */
+  uploadImage: (blob: Blob, fileName: string, onProgress?: (fraction: number) => void) => {
+    const form = new FormData();
+    form.append("file", blob, fileName);
+    if (!onProgress) return request<{ image: { id: string; url: string } }>("/api/images", { method: "POST", raw: form });
+    return new Promise<{ image: { id: string; url: string } }>((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", "/api/images");
+      xhr.withCredentials = true;
+      xhr.responseType = "text";
+      xhr.upload.onprogress = (event) => {
+        if (event.lengthComputable) onProgress(event.total > 0 ? event.loaded / event.total : 0);
+      };
+      xhr.onload = () => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          try {
+            resolve(JSON.parse(xhr.responseText) as { image: { id: string; url: string } });
+          } catch {
+            reject(new ApiError(tActive("api.badUploadResponse"), xhr.status));
+          }
+          return;
+        }
+        let message = `Erro ${xhr.status}`;
+        try {
+          const payload = JSON.parse(xhr.responseText) as { error?: string };
+          if (payload.error) message = payload.error;
+        } catch {
+          // sem JSON
+        }
+        if (xhr.status === 401) notifyUnauthorized("/api/images");
+        reject(new ApiError(message, xhr.status));
+      };
+      xhr.onerror = () => reject(new ApiError(tActive("api.unreachable"), 0));
+      xhr.send(form);
+    });
+  },
 
   files: (slug: string, root: "code" | "data", path = "") =>
     request<FileListing>(`/api/apps/${encodeURIComponent(slug)}/files?root=${root}&path=${encodeURIComponent(path)}`),

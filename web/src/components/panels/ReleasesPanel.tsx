@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { api } from "../../api.ts";
 import { errorText, useAsync } from "../../hooks.ts";
+import { useI18n } from "../../i18n/index.tsx";
 import type { AppSummary } from "../../types.ts";
 import { formatDateTime, humanBytes, relativeTime } from "../../format.ts";
 import { Alert, Badge, Button, Card, Modal, SkeletonRows, Spinner } from "../ui.tsx";
@@ -59,7 +60,7 @@ export default function ReleasesPanel({
     setError(null);
     try {
       await api.deleteRelease(slug, seq);
-      toast.success(`Versão v${seq} removida do disco.`);
+      toast.success(t("versions.removed", { value: seq }));
       await releasesState.reload();
     } catch (caught) {
       const message = errorText(caught);
@@ -71,36 +72,38 @@ export default function ReleasesPanel({
     }
   };
 
+  const { t } = useI18n();
+
   return (
     <div className="space-y-5">
       <Card
-        title="Publicar nova versão"
-        subtitle="Envie um ZIP novo — a versão atual segue no ar até a instalação terminar com sucesso"
+        title={t("versions.publishCard")}
+        subtitle={t("versions.publishCard.hint")}
         actions={
           <Button variant="primary" size="sm" onClick={onOpenUpdate}>
-            <IconUpload className="h-3.5 w-3.5" /> Atualizar código
+            <IconUpload className="h-3.5 w-3.5" /> {t("actions.updateCode")}
           </Button>
         }
       >
         <div className="space-y-3 text-xs text-slate-400">
           <p>
-            O painel extrai o pacote, instala as dependências em um container descartável, publica o release e recria o
-            container. O diretório <span className="font-mono">/data</span> nunca é alterado por esse processo.
+            {t("versions.publishCard.body.before")} <span className="font-mono">/data</span>{" "}
+            {t("versions.publishCard.body.after")}
           </p>
           {error ? <Alert tone="red">{error}</Alert> : null}
         </div>
       </Card>
 
       <Card
-        title={`Versões (${releases.length})`}
+        title={t("versions.title", { count: releases.length })}
         subtitle={
           activeRelease > 0
-            ? `Versão ativa: v${activeRelease} · ${app.releaseCount} versão(ões) guardada(s)`
-            : "Nenhuma versão publicada ainda"
+            ? t("versions.subtitle", { version: activeRelease, count: app.releaseCount })
+            : t("versions.noVersionYet")
         }
         actions={
           <Button size="sm" onClick={() => void releasesState.reload()}>
-            <IconRefresh className="h-3.5 w-3.5" /> Atualizar
+            <IconRefresh className="h-3.5 w-3.5" /> {t("common.refresh")}
           </Button>
         }
         bodyClassName="p-0"
@@ -109,7 +112,7 @@ export default function ReleasesPanel({
           <SkeletonRows rows={4} />
         ) : sorted.length === 0 ? (
           <p className="p-4 text-xs text-slate-500">
-            Nenhuma versão publicada. Use <strong>Atualizar código</strong> para enviar o primeiro ZIP.
+            {t("versions.empty.before")} <strong>{t("actions.updateCode")}</strong> {t("versions.empty.after")}
           </p>
         ) : (
           <ul className="divide-y divide-white/6">
@@ -120,12 +123,18 @@ export default function ReleasesPanel({
                   <div className="min-w-0 flex-1">
                     <p className="flex flex-wrap items-center gap-2 text-slate-200">
                       <span className="font-mono font-semibold">v{release.seq}</span>
-                      {isActive ? <Badge tone="green">atual</Badge> : <Badge>arquivada</Badge>}
+                      {isActive ? (
+                        <Badge tone="green">{t("versions.current")}</Badge>
+                      ) : (
+                        <Badge>{t("versions.archived")}</Badge>
+                      )}
                       {release.notes ? <span className="truncate text-slate-400">— {release.notes}</span> : null}
                     </p>
                     <p className="mt-0.5 text-[11px] text-slate-500">
                       {formatDateTime(release.createdAt)} ({relativeTime(release.createdAt)}) · {humanBytes(release.sizeBytes)} ·{" "}
-                      <span className="font-mono">{release.entry || release.startCommand || "comando próprio"}</span>
+                      <span className="font-mono">
+                        {release.entry || release.startCommand || t("overview.ownCommand")}
+                      </span>
                     </p>
                   </div>
 
@@ -137,42 +146,38 @@ export default function ReleasesPanel({
                           loading={busy === `activate-${release.seq}`}
                           onClick={() =>
                             setConfirm({
-                              title: `Voltar para a versão v${release.seq}?`,
+                              title: t("versions.confirm.rollback.title", { value: release.seq }),
                               description: (
                                 <div className="space-y-2">
                                   <p>
-                                    O container será recriado apontando para o código da v{release.seq}. O volume{" "}
-                                    <span className="font-mono">/data</span> é mantido intacto.
+                                    {t("versions.confirm.rollback.before", { value: release.seq })}{" "}
+                                    <span className="font-mono">/data</span>{" "}
+                                    {t("versions.confirm.rollback.after")}
                                   </p>
-                                  <p className="text-slate-400">
-                                    A configuração de execução registrada nessa versão (arquivo principal, comando de start e
-                                    imagem) também volta. RAM, CPU, variáveis e portas permanecem como estão hoje.
-                                  </p>
-                                  <p className="text-slate-400">
-                                    A aplicação fica alguns segundos fora do ar durante a troca.
-                                  </p>
+                                  <p className="text-slate-400">{t("versions.confirm.rollback.config")}</p>
+                                  <p className="text-slate-400">{t("versions.confirm.rollback.downtime")}</p>
                                 </div>
                               ),
-                              confirmLabel: `Ativar v${release.seq}`,
+                              confirmLabel: t("versions.confirm.activate", { value: release.seq }),
                               run: () => activate(release.seq),
                             })
                           }
                         >
-                          <IconRestart className="h-3.5 w-3.5" /> Rollback
+                          <IconRestart className="h-3.5 w-3.5" /> {t("versions.rollback")}
                         </Button>
                         <Button
                           size="sm"
                           variant="ghost"
                           onClick={() =>
                             setConfirm({
-                              title: `Remover a versão v${release.seq}?`,
+                              title: t("versions.confirm.remove.title", { value: release.seq }),
                               description: (
                                 <p>
-                                  Os arquivos dessa versão serão apagados do disco. Esta ação não pode ser desfeita e não
-                                  afeta o <span className="font-mono">/data</span> da aplicação.
+                                  {t("versions.confirm.remove.before")}{" "}
+                                  <span className="font-mono">/data</span> {t("versions.confirm.remove.after")}
                                 </p>
                               ),
-                              confirmLabel: "Remover versão",
+                              confirmLabel: t("versions.confirm.remove"),
                               danger: true,
                               run: () => removeRelease(release.seq),
                             })
@@ -182,7 +187,7 @@ export default function ReleasesPanel({
                         </Button>
                       </>
                     ) : (
-                      <span className="px-2 text-[11px] text-slate-500">em execução</span>
+                      <span className="px-2 text-[11px] text-slate-500">{t("versions.running")}</span>
                     )}
                   </div>
                 </li>
@@ -192,21 +197,21 @@ export default function ReleasesPanel({
         )}
       </Card>
 
-      <Card title="Histórico de deploys" subtitle="Cada publicação com o log completo" bodyClassName="p-0">
+      <Card title={t("versions.deployHistory")} subtitle={t("versions.deployHistory.hint")} bodyClassName="p-0">
         {deploymentsState.loading && deploymentsState.data === null ? (
           <div className="flex items-center gap-2 p-4 text-xs text-slate-400">
-            <Spinner /> carregando…
+            <Spinner /> {t("common.loading")}
           </div>
         ) : (
           <ul className="divide-y divide-white/6 text-xs">
             {(deploymentsState.data?.deployments ?? []).map((deployment) => (
               <li key={deployment.id} className="flex flex-wrap items-center gap-2 px-4 py-2.5">
                 <span className="text-slate-300">
-                  {deployment.kind === "deploy" ? "Publicação" : deployment.kind}
-                  {deployment.releaseSeq ? ` da v${deployment.releaseSeq}` : ""}
+                  {deployment.kind === "deploy" ? t("overview.deployment") : deployment.kind}
+                  {deployment.releaseSeq ? t("versions.deploymentOf", { value: deployment.releaseSeq }) : ""}
                 </span>
                 <Badge tone={deployment.status === "success" ? "green" : deployment.status === "failed" ? "red" : "amber"}>
-                  {deployment.status === "success" ? "concluído" : deployment.status === "failed" ? "falhou" : "em andamento"}
+                  {t(`deploy.status.${deployment.status}`)}
                 </Badge>
                 <span className="text-slate-500">{relativeTime(deployment.startedAt)}</span>
                 <button
@@ -214,12 +219,12 @@ export default function ReleasesPanel({
                   className="ml-auto rounded-md px-2 py-1 text-[11px] text-slate-400 hover:bg-slate-800 hover:text-slate-200"
                   onClick={() => setLogDeployment(deployment.id)}
                 >
-                  ver log
+                  {t("versions.viewLog")}
                 </button>
               </li>
             ))}
             {(deploymentsState.data?.deployments.length ?? 0) === 0 ? (
-              <li className="px-4 py-4 text-slate-500">Nenhum deploy registrado.</li>
+              <li className="px-4 py-4 text-slate-500">{t("versions.noDeploys")}</li>
             ) : null}
           </ul>
         )}
@@ -227,12 +232,12 @@ export default function ReleasesPanel({
 
       <Modal
         open={logDeployment !== null}
-        title="Log do deploy"
+        title={t("versions.deployLog")}
         onClose={() => setLogDeployment(null)}
         wide
         footer={
           <Button variant="ghost" onClick={() => setLogDeployment(null)}>
-            Fechar
+            {t("common.close")}
           </Button>
         }
       >

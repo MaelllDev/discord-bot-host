@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { api } from "../api.ts";
 import { useAsync } from "../hooks.ts";
 import { humanDuration } from "../format.ts";
@@ -7,13 +8,75 @@ import {
   Button,
   Card,
   DescriptionList,
+  Field,
   InlineCode,
+  Input,
   PageHeader,
   SkeletonCard,
 } from "../components/ui.tsx";
 import { IconAlert, IconLogout, IconSettings } from "../components/icons.tsx";
 import { CREATOR, CreatorLinks, SupportLink } from "../components/Credits.tsx";
 import AiSettingsCard from "../components/AiSettingsCard.tsx";
+import WebhooksCard from "../components/WebhooksCard.tsx";
+import ImageUpload from "../components/ImageUpload.tsx";
+import LanguageSwitch from "../components/LanguageSwitch.tsx";
+import { useI18n } from "../i18n/index.tsx";
+import { useBranding } from "../branding.tsx";
+
+/** Card de identidade visual: nome e ícone do painel, aplicados na hora. */
+function BrandingCard() {
+  const { t } = useI18n();
+  const branding = useBranding();
+  const [name, setName] = useState(branding.name);
+  const [saving, setSaving] = useState(false);
+  const dirty = name.trim().length > 0 && name !== branding.name;
+
+  const saveName = async (): Promise<void> => {
+    setSaving(true);
+    try {
+      const result = await api.saveBranding({ name: name.trim() });
+      branding.apply(result.branding);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Card title={t("settings.branding.title")} subtitle={t("settings.branding.hint")}>
+      <div className="space-y-5">
+        <Field label={t("settings.branding.name")} hint={t("settings.branding.name.hint")}>
+          <div className="flex flex-wrap gap-2">
+            <Input value={name} onChange={(event) => setName(event.target.value)} maxLength={48} className="max-w-xs" />
+            <Button variant="primary" disabled={!dirty} loading={saving} onClick={() => void saveName()}>
+              {t("config.save")}
+            </Button>
+          </div>
+        </Field>
+
+        <ImageUpload
+          value={branding.iconUrl === "/logo.png" ? "" : branding.iconUrl}
+          onChange={(url) => {
+            if (url) {
+              void api
+                .saveBranding({ iconUrl: url })
+                .then((result) => branding.apply(result.branding));
+            } else {
+              void api
+                .saveBranding({ iconUrl: "" })
+                .then((result) => {
+                  branding.apply(result.branding);
+                  branding.resetIcon();
+                });
+            }
+          }}
+          label={t("settings.branding.icon")}
+          hint={t("settings.branding.icon.hint")}
+          size={64}
+        />
+      </div>
+    </Card>
+  );
+}
 
 interface SettingRow {
   variable: string;
@@ -23,6 +86,7 @@ interface SettingRow {
 }
 
 export default function Settings({ onLogout }: { onLogout?: () => void }) {
+  const { t } = useI18n();
   const systemState = useAsync(() => api.system(), [], { pollMs: 30_000 });
   const system = systemState.data;
 
@@ -38,8 +102,8 @@ export default function Settings({ onLogout }: { onLogout?: () => void }) {
   if (!system) {
     return (
       <div className="space-y-3">
-        <PageHeader title="Configurações" icon={<IconSettings className="h-4 w-4" />} />
-        <Alert tone="red">{systemState.error ?? "Não foi possível ler a configuração do painel."}</Alert>
+        <PageHeader title={t("nav.settings")} icon={<IconSettings className="h-4 w-4" />} />
+        <Alert tone="red">{systemState.error ?? t("settings.readFailed")}</Alert>
       </div>
     );
   }
@@ -49,115 +113,128 @@ export default function Settings({ onLogout }: { onLogout?: () => void }) {
   const rows: SettingRow[] = [
     {
       variable: "BOTPANEL_NAME",
-      label: "Nome exibido no painel",
+      label: t("settings.row.panelName"),
       value: system.panelName,
-      hint: "Aparece na sidebar e no título das páginas.",
+      hint: t("settings.row.panelName.hint"),
     },
     {
       variable: "BOTPANEL_HOST",
-      label: "Endereço de escuta",
+      label: t("settings.row.host"),
       value: config.host,
-      hint: "0.0.0.0 expõe em todas as interfaces. Coloque um proxy com HTTPS na frente.",
+      hint: t("settings.row.host.hint"),
     },
     {
       variable: "BOTPANEL_PORT",
-      label: "Porta",
+      label: t("settings.row.port"),
       value: String(config.port),
-      hint: "Porta HTTP do painel.",
+      hint: t("settings.row.port.hint"),
     },
     {
       variable: "BOTPANEL_COOKIE_SECURE",
-      label: "Cookie seguro",
-      value: config.cookieSecure ? "ativado (1)" : "desativado (0)",
-      hint: "Ative somente quando o painel estiver acessível via HTTPS.",
+      label: t("settings.row.cookieSecure"),
+      value: config.cookieSecure
+        ? t("settings.row.cookieSecure.valueOn")
+        : t("settings.row.cookieSecure.valueOff"),
+      hint: t("settings.row.cookieSecure.hint"),
     },
     {
       variable: "BOTPANEL_DATA_DIR",
-      label: "Diretório de dados",
+      label: t("system.env.dataDir"),
       value: system.dataDir,
-      hint: "Banco, releases e volumes /data de todas as aplicações.",
+      hint: t("settings.row.dataDir.hint"),
     },
     {
       variable: "BOTPANEL_DOCKER_SOCKET",
-      label: "Socket do Docker",
+      label: t("system.env.dockerSocket"),
       value: config.dockerSocket,
-      hint: "Onde o painel fala com o daemon.",
+      hint: t("settings.row.dockerSocket.hint"),
     },
     {
       variable: "BOTPANEL_RUN_UID / BOTPANEL_RUN_GID",
-      label: "Usuário dentro dos containers",
+      label: t("settings.row.runUser"),
       value: `${config.runUid}:${config.runGid}`,
-      hint: "Donos dos arquivos das aplicações dentro do container.",
+      hint: t("settings.row.runUser.hint"),
     },
     {
       variable: "BOTPANEL_MAX_UPLOAD_MB",
-      label: "Tamanho máximo de ZIP",
+      label: t("settings.row.maxUpload"),
       value: `${config.maxUploadMb} MB`,
-      hint: "Limite por upload de código.",
+      hint: t("settings.row.maxUpload.hint"),
     },
     {
       variable: "BOTPANEL_KEEP_RELEASES",
-      label: "Retenção de versões",
-      value: config.keepReleases === 0 ? "manter todas" : `últimas ${config.keepReleases}`,
-      hint: "Versões mais antigas são removidas depois de cada deploy bem-sucedido.",
+      label: t("system.env.keepReleases"),
+      value:
+        config.keepReleases === 0
+          ? t("settings.row.keepReleases.all")
+          : t("system.env.keepLast", { count: config.keepReleases }),
+      hint: t("settings.row.keepReleases.hint"),
     },
     {
       variable: "BOTPANEL_SESSION_TTL_HOURS",
-      label: "Duração da sessão",
+      label: t("settings.row.sessionTtl"),
       value: `${config.sessionTtlHours} h (${humanDuration(config.sessionTtlHours * 3600)})`,
-      hint: "Depois desse tempo o painel volta para a tela de login.",
+      hint: t("settings.row.sessionTtl.hint"),
     },
     {
       variable: "BOTPANEL_ALLOWED_IMAGES",
-      label: "Imagens permitidas",
-      value: config.allowedImages === null ? "qualquer imagem" : config.allowedImages.join(", "),
-      hint: "Restringe as imagens Docker usáveis pelas aplicações.",
+      label: t("settings.row.allowedImages"),
+      value: config.allowedImages === null ? t("settings.row.allowedImages.any") : config.allowedImages.join(", "),
+      hint: t("settings.row.allowedImages.hint"),
     },
     {
       variable: "BOTPANEL_PASSWORD / BOTPANEL_PASSWORD_HASH",
-      label: "Senha do painel",
-      value: "definida por variável de ambiente",
-      hint: "A senha nunca é exposta pela API. Alterar exige editar /etc/botpanel.env e reiniciar o serviço.",
+      label: t("settings.row.password"),
+      value: t("settings.row.password.value"),
+      hint: t("settings.row.password.hint"),
     },
   ];
 
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Configurações"
+        title={t("nav.settings")}
         icon={<IconSettings className="h-4 w-4" />}
-        subtitle="Valores efetivos em execução. Esta página é somente leitura."
+        subtitle={t("settings.subtitle")}
         actions={
           <Button size="sm" variant="outline" onClick={() => void systemState.reload()}>
-            Atualizar
+            {t("common.refresh")}
           </Button>
         }
       />
 
+      <BrandingCard />
+
+      <WebhooksCard />
+
+      <Card title={t("settings.language.title")} subtitle={t("settings.language.hint")}>
+        <LanguageSwitch />
+      </Card>
+
       <Alert tone="amber" icon={<IconAlert className="h-3.5 w-3.5" />}>
-        A API do painel expõe a configuração apenas para leitura (<InlineCode>GET /api/system</InlineCode>) — não existe
-        endpoint para gravar configuração. Para alterar qualquer valor, edite <InlineCode>/etc/botpanel.env</InlineCode>,
-        rode <InlineCode>systemctl daemon-reload</InlineCode> quando mudar o unit e reinicie com{" "}
-        <InlineCode>systemctl restart botpanel</InlineCode>. A senha e o segredo de sessão seguem a mesma regra e jamais
-        são devolvidos pela API.
+        {t("settings.readonly.before")} <InlineCode>GET /api/system</InlineCode>{" "}
+        {t("settings.readonly.afterApi")} <InlineCode>/etc/botpanel.env</InlineCode>{", "}
+        {t("settings.readonly.beforeReload")} <InlineCode>systemctl daemon-reload</InlineCode>{" "}
+        {t("settings.readonly.afterReload")} <InlineCode>systemctl restart botpanel</InlineCode>
+        {t("settings.readonly.tail")}
       </Alert>
 
       <Card
-        title="Configuração efetiva"
-        subtitle="Fonte: /etc/botpanel.env e o unit systemd do serviço"
+        title={t("settings.config.title")}
+        subtitle={t("settings.config.hint")}
         footer={
           <div className="flex flex-wrap items-center gap-3">
             <span className="text-[11px] text-slate-500">
-              Instância <InlineCode>{config.instanceId}</InlineCode> · os containers e redes criados por ela carregam
-              esse identificador.
+              {t("settings.instance.before")} <InlineCode>{config.instanceId}</InlineCode>{" "}
+              {t("settings.instance.after")}
             </span>
             <div className="ml-auto flex gap-2">
               <Button size="sm" onClick={() => void systemState.reload()}>
-                Recarregar
+                {t("settings.reload")}
               </Button>
               {onLogout ? (
                 <Button size="sm" variant="secondary" onClick={onLogout}>
-                  <IconLogout className="h-3.5 w-3.5" /> Encerrar sessão
+                  <IconLogout className="h-3.5 w-3.5" /> {t("settings.logout")}
                 </Button>
               ) : null}
             </div>
@@ -185,37 +262,33 @@ export default function Settings({ onLogout }: { onLogout?: () => void }) {
       <AiSettingsCard />
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Operação do serviço" subtitle="Comandos úteis no host">
+        <Card title={t("settings.ops.title")} subtitle={t("settings.ops.hint")}>
           <DescriptionList
             items={[
-              { label: "Estado do painel", value: <InlineCode>systemctl status botpanel</InlineCode> },
-              { label: "Logs do painel", value: <InlineCode>journalctl -u botpanel -f</InlineCode> },
-              { label: "Estado do Docker", value: <InlineCode>systemctl status docker</InlineCode> },
-              { label: "Containers do painel", value: <InlineCode>docker ps --filter label=botpanel.app</InlineCode> },
+              { label: t("settings.ops.status"), value: <InlineCode>systemctl status botpanel</InlineCode> },
+              { label: t("settings.ops.logs"), value: <InlineCode>journalctl -u botpanel -f</InlineCode> },
+              { label: t("settings.ops.docker"), value: <InlineCode>systemctl status docker</InlineCode> },
+              { label: t("settings.ops.containers"), value: <InlineCode>docker ps --filter label=botpanel.app</InlineCode> },
             ]}
           />
         </Card>
 
-        <Card title="Senha e sessão" subtitle="Como o acesso é protegido">
+        <Card title={t("settings.auth.title")} subtitle={t("settings.auth.hint")}>
           <div className="space-y-3 text-xs leading-relaxed text-slate-300">
             <p>
-              O acesso usa uma senha única de administrador, verificada no servidor. A sessão é um cookie{" "}
-              <InlineCode>httpOnly</InlineCode> assinado com HMAC-SHA256 e válido por{" "}
-              {config.sessionTtlHours} h.
+              {t("settings.auth.body1.before")} <InlineCode>httpOnly</InlineCode>{" "}
+              {t("settings.auth.body1.after")} {config.sessionTtlHours} h.
             </p>
             <p>
-              O botão <strong>Encerrar sessão</strong> invalida todos os tokens emitidos até agora (a geração da sessão
-              muda no banco), não apenas apaga o cookie deste navegador.
+              {t("settings.auth.body2.before")} <strong>{t("settings.logout")}</strong>{" "}
+              {t("settings.auth.body2.after")}
             </p>
-            <p className="text-slate-500">
-              Não há multiusuário, permissões por aplicação ou chaves de API — é um painel privado de administrador
-              único, conforme o escopo do projeto.
-            </p>
+            <p className="text-slate-500">{t("settings.auth.body3")}</p>
           </div>
         </Card>
       </div>
 
-      <Card title="Créditos" subtitle={`Projeto criado e mantido por ${CREATOR.name}`}>
+      <Card title={t("settings.credits.title")} subtitle={t("settings.credits.hint", { name: CREATOR.name })}>
         <div className="flex flex-wrap items-start gap-4">
           <img
             src="/logo.png"
@@ -226,11 +299,13 @@ export default function Settings({ onLogout }: { onLogout?: () => void }) {
           />
           <div className="min-w-0 flex-1 space-y-3 text-xs leading-relaxed text-slate-300">
             <p>
-              O BotPanel é distribuído para <strong>self-host</strong>: qualquer pessoa pode subir o próprio painel na
-              VPS. Os links abaixo são do autor do projeto — se ele te foi útil, siga e acompanhe as novidades.
+              {t("settings.credits.body.before")} <strong>{t("settings.credits.body.strong")}</strong>
+              {t("settings.credits.body.after")}
             </p>
             <CreatorLinks />
-            <p className="text-[11px] text-slate-500">BotPanel — projeto de {CREATOR.name}.</p>
+            <p className="text-[11px] text-slate-500">
+              {t("settings.credits.footer", { name: CREATOR.name })}
+            </p>
             <div className="max-w-xs pt-1">
               <SupportLink />
             </div>

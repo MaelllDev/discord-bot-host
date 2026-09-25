@@ -12,14 +12,27 @@ import type {
   RuntimeKind,
 } from "../types.ts";
 import { DockerService } from "../docker/service.ts";
-import { getRuntime, isImageAllowed, parsePortMappings, renderInstallCommand, renderStartCommand } from "../docker/templates.ts";
+import { getRuntime, parsePortMappings, renderInstallCommand, renderStartCommand } from "../docker/templates.ts";
 import { extractZip } from "../util/archive.ts";
 import { chownRecursive, dirSize, ensureDir, listDirectory, pathExists, rmrf } from "../util/fsx.ts";
 import { humanBytes } from "../util/format.ts";
 import { KeyedMutex } from "../util/mutex.ts";
 import { isValidSlug, uniqueSlug } from "../util/slug.ts";
 import { ConflictError, NotFoundError, ValidationError, errorMessage } from "../errors.ts";
+import type { NotifyKind } from "../notify/webhooks.ts";
 import { detectProject } from "./detect.ts";
+import {
+  commandIssues,
+  cpuProblem,
+  envIssues,
+  imageExistenceIssue,
+  imageIssues,
+  memoryProblem,
+  pidsProblem,
+  portsIssues,
+  throwIfInvalid,
+  type ValidationIssue,
+} from "./validate.ts";
 import { buildContainerSpec, containerNameFor, networkNameFor, restartPolicyFor, toCreateOptions } from "./spec.ts";
 import { applyStopIntent } from "./status.ts";
 import {
@@ -66,14 +79,6 @@ export interface StartedDeploy extends DeployResult {
   finished: Promise<void>;
 }
 
-const ENV_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
-const MIN_MEMORY_MB = 64;
-const MAX_MEMORY_MB = 32_768;
-const MIN_CPU = 0.1;
-const MAX_CPU = 16;
-const MIN_PIDS = 32;
-const MAX_PIDS = 4096;
-
 function chunk<T>(items: T[], size: number): T[][] {
   const result: T[][] = [];
   for (let index = 0; index < items.length; index += size) result.push(items.slice(index, index + size));
@@ -112,6 +117,9 @@ export class DeploymentLog {
   }
 }
 
+/** Gancho de ciclo de vida — conectado ao NotifyService em server.ts. */
+export type LifecycleHook = (kind: NotifyKind, app: { name: string; slug: string; autoRestart: boolean }) => void;
+
 export class AppService {
   private readonly config: PanelConfig;
   private readonly store: Store;
@@ -119,11 +127,24 @@ export class AppService {
   private readonly locks = new KeyedMutex();
   /** Cache do uso de disco (varrer node_modules a cada poll seria caro). */
   private readonly diskCache = new Map<string, { bytes: number; at: number }>();
+  /** Avisos (webhooks): preenchido pelo server.ts após a construção. */
+  onLifecycle: LifecycleHook | null = null;
+  /** Marca intenção de ação manual (o observador de status se cala). */
+  onIntent: ((slug: string) => void) | null = null;
 
   constructor(config: PanelConfig, store: Store, docker: DockerService) {
     this.config = config;
     this.store = store;
     this.docker = docker;
+  }
+
+  /** Notifica o gancho de ciclo de vida sem nunca bloquear a ação. */
+  private emit(kind: NotifyKind, app: AppRecord): void {
+    try {
+      this.onLifecycle?.(kind, { name: app.name, slug: app.slug, autoRestart: app.autoRestart });
+    } catch {
+      // aviso nunca derruba a operação que o causou
+    }
   }
 
   // ------------------------------------------------------------ consultas
@@ -191,15 +212,31 @@ export class AppService {
   async create(input: CreateAppInput): Promise<AppRecord> {
     const name = (input.name ?? "").trim();
     if (name.length < 2 || name.length > 48) {
-      throw new ValidationError("O nome deve ter entre 2 e 48 caracteres.");
+      throw new ValidationError("O nome deve ter entre 2 e 48 caracteres.", undefined, "name.length");
     }
 
     const runtime = getRuntime(input.runtime);
+    const issues: ValidationIssue[] = [];
     const slug = input.slug ? this.validateSlug(input.slug) : uniqueSlug(name, (candidate) => this.store.slugTaken(candidate));
     const image = (input.image ?? runtime.image).trim();
-    if (!isImageAllowed(image, this.config.allowedImages)) {
-      throw new ValidationError(`A imagem "${image}" não está na lista de imagens permitidas.`);
-    }
+    issues.push(...imageIssues(image, this.config.allowedImages));
+    issues.push(...envIssues(input.env ?? []));
+    issues.push(...portsIssues(input.ports ?? []));
+    const memory = memoryProblem(input.memoryMb ?? 512);
+    if (memory) issues.push(memory);
+    const cpu = cpuProblem(input.cpu ?? 1);
+    if (cpu) issues.push(cpu);
+    const pids = pidsProblem(input.pidsLimit ?? 256);
+    if (pids) issues.push(pids);
+    // Na criação ainda não há ZIP: a detecção de dependências vem depois, no
+    // deploy. O comando de start é validado aqui (runtime livre, etc.).
+    issues.push(...commandIssues(runtime.kind, input.entry ?? "", input.startCommand ?? ""));
+    // Imagem inexistente é recusada na criação: é o erro de digitação clássico
+    // que antes só aparecia depois, como deploy falho. Registry indisponível
+    // não bloqueia (indeterminate → null).
+    const existence = await imageExistenceIssue(this.docker, image);
+    if (existence) issues.push(existence);
+    throwIfInvalid(issues, "Não foi possível criar a aplicação.");
 
     const app: AppRecord = {
       id: randomUUID(),
@@ -238,7 +275,9 @@ export class AppService {
 
     if (patch.name !== undefined) {
       const name = patch.name.trim();
-      if (name.length < 2 || name.length > 48) throw new ValidationError("O nome deve ter entre 2 e 48 caracteres.");
+      if (name.length < 2 || name.length > 48) {
+        throw new ValidationError("O nome deve ter entre 2 e 48 caracteres.", undefined, "name.length");
+      }
       changes.name = name;
     }
     if (patch.description !== undefined) changes.description = patch.description.trim().slice(0, 280);
@@ -246,21 +285,49 @@ export class AppService {
     if (patch.runtime !== undefined) changes.runtime = getRuntime(patch.runtime).kind;
     if (patch.image !== undefined) {
       const image = patch.image.trim();
-      if (image.length === 0) throw new ValidationError("Informe uma imagem Docker.");
-      if (!isImageAllowed(image, this.config.allowedImages)) {
-        throw new ValidationError(`A imagem "${image}" não está na lista de imagens permitidas.`);
-      }
+      const imageProblems = imageIssues(image, this.config.allowedImages);
+      const existence = await imageExistenceIssue(this.docker, image);
+      if (existence) imageProblems.push(existence);
+      throwIfInvalid(imageProblems, "Imagem Docker inválida.");
       changes.image = image;
     }
     if (patch.entry !== undefined) changes.entry = patch.entry.trim();
     if (patch.startCommand !== undefined) changes.startCommand = patch.startCommand.trim();
     if (patch.installCommand !== undefined) changes.installCommand = patch.installCommand.trim();
     if (patch.depsFile !== undefined) changes.depsFile = patch.depsFile.trim();
-    if (patch.memoryMb !== undefined) changes.memoryMb = this.validateMemory(patch.memoryMb);
-    if (patch.cpu !== undefined) changes.cpu = this.validateCpu(patch.cpu);
-    if (patch.pidsLimit !== undefined) changes.pidsLimit = this.validatePids(patch.pidsLimit);
-    if (patch.env !== undefined) changes.env = this.validateEnv(patch.env);
-    if (patch.ports !== undefined) changes.ports = this.validatePorts(patch.ports);
+    if (patch.memoryMb !== undefined || patch.cpu !== undefined || patch.pidsLimit !== undefined || patch.env !== undefined || patch.ports !== undefined) {
+      // Revalida sobre a configuração resultante: um patch parcial combina com o
+      // estado atual, então os problemas são sempre da configuração completa.
+      const merged = { ...app, ...patch } as AppRecord;
+      const updateIssues: ValidationIssue[] = [];
+      if (patch.memoryMb !== undefined) {
+        const memory = memoryProblem(merged.memoryMb);
+        if (memory) updateIssues.push(memory);
+        changes.memoryMb = merged.memoryMb;
+      }
+      if (patch.cpu !== undefined) {
+        const cpuIssue = cpuProblem(merged.cpu);
+        if (cpuIssue) updateIssues.push(cpuIssue);
+        changes.cpu = merged.cpu;
+      }
+      if (patch.pidsLimit !== undefined) {
+        const pids = pidsProblem(merged.pidsLimit);
+        if (pids) updateIssues.push(pids);
+        changes.pidsLimit = merged.pidsLimit;
+      }
+      if (patch.env !== undefined) {
+        updateIssues.push(...envIssues(merged.env));
+        changes.env = merged.env;
+      }
+      if (patch.ports !== undefined) {
+        updateIssues.push(...portsIssues(merged.ports));
+        changes.ports = merged.ports;
+      }
+      if (patch.entry !== undefined || patch.startCommand !== undefined || patch.runtime !== undefined) {
+        updateIssues.push(...commandIssues(merged.runtime, merged.entry, merged.startCommand));
+      }
+      throwIfInvalid(updateIssues, "Não foi possível salvar a configuração.");
+    }
     if (patch.autoStart !== undefined) changes.autoStart = patch.autoStart;
     if (patch.autoRestart !== undefined) changes.autoRestart = patch.autoRestart;
 
@@ -321,6 +388,7 @@ export class AppService {
     await this.locks.run(slug, () => this.startContainer(app));
     this.store.updateApp(app.id, { stoppedByUser: false });
     this.store.addEvent(app.id, "info", "Aplicação iniciada");
+    this.emit("started", app);
   }
 
   /**
@@ -354,6 +422,7 @@ export class AppService {
         await this.locks.run(app.slug, () => this.startContainer(app));
         this.store.updateApp(app.id, { stoppedByUser: false });
         this.store.addEvent(app.id, "info", "Aplicação iniciada junto com o sistema");
+        this.emit("started", app);
         started.push(app.slug);
       } catch (error) {
         failed.push({ slug: app.slug, error: errorMessage(error) });
@@ -368,6 +437,7 @@ export class AppService {
     // Registra a intenção ANTES de parar: assim o instante entre o comando e o
     // container encerrar já é lido como "parado pelo usuário", e não como falha.
     this.store.updateApp(app.id, { stoppedByUser: true });
+    this.onIntent?.(slug);
     try {
       await this.locks.run(slug, async () => {
         await this.docker.stop(containerNameFor(app.slug), 10);
@@ -378,6 +448,7 @@ export class AppService {
       throw error;
     }
     this.store.addEvent(app.id, "info", "Aplicação parada");
+    this.emit("stopped", app);
   }
 
   async restart(slug: string): Promise<void> {
@@ -397,10 +468,12 @@ export class AppService {
         await this.applyContainer(app, true);
       }
     });
+    this.onIntent?.(slug);
     // Reiniciar é uma intenção explícita de manter rodando: se o container
     // voltar a morrer sozinho, isso deve aparecer como falha.
     this.store.updateApp(app.id, { stoppedByUser: false });
     this.store.addEvent(app.id, "info", "Aplicação reiniciada");
+    this.emit("restarted", app);
   }
 
   async logs(slug: string, tail = 400): Promise<string> {
@@ -690,9 +763,15 @@ export class AppService {
   private validateSlug(slug: string): string {
     const value = slug.trim().toLowerCase();
     if (!isValidSlug(value)) {
-      throw new ValidationError("Identificador inválido: use de 2 a 32 caracteres (a-z, 0-9 e -).");
+      throw new ValidationError(
+        "Identificador inválido: use de 2 a 32 caracteres (a-z, 0-9 e -).",
+        undefined,
+        "slug.invalid",
+      );
     }
-    if (this.store.slugTaken(value)) throw new ConflictError(`Já existe uma aplicação com o identificador "${value}".`);
+    if (this.store.slugTaken(value)) {
+      throw new ConflictError(`Já existe uma aplicação com o identificador "${value}".`, "slug.taken");
+    }
     return value;
   }
 
@@ -717,53 +796,37 @@ export class AppService {
   }
 
   private validateMemory(value: number): number {
-    if (!Number.isFinite(value) || value < MIN_MEMORY_MB || value > MAX_MEMORY_MB) {
-      throw new ValidationError(`A memória deve estar entre ${MIN_MEMORY_MB} MB e ${MAX_MEMORY_MB} MB.`);
-    }
+    throwIfInvalid(memoryProblem(value) ? [memoryProblem(value)!] : [], "Configuração inválida.");
     return Math.round(value);
   }
 
   private validateCpu(value: number): number {
-    if (!Number.isFinite(value) || value < MIN_CPU || value > MAX_CPU) {
-      throw new ValidationError(`A CPU deve estar entre ${MIN_CPU} e ${MAX_CPU} núcleos.`);
-    }
+    throwIfInvalid(cpuProblem(value) ? [cpuProblem(value)!] : [], "Configuração inválida.");
     return Math.round(value * 100) / 100;
   }
 
   private validatePids(value: number): number {
-    if (!Number.isFinite(value) || value < MIN_PIDS || value > MAX_PIDS) {
-      throw new ValidationError(`O limite de processos deve estar entre ${MIN_PIDS} e ${MAX_PIDS}.`);
-    }
+    throwIfInvalid(pidsProblem(value) ? [pidsProblem(value)!] : [], "Configuração inválida.");
     return Math.round(value);
   }
 
   private validateEnv(env: EnvVar[]): EnvVar[] {
-    const seen = new Set<string>();
+    throwIfInvalid(envIssues(env), "Configuração inválida.");
     const result: EnvVar[] = [];
     for (const item of env) {
       const key = (item.key ?? "").trim();
       if (key.length === 0) continue;
-      if (!ENV_KEY_PATTERN.test(key)) {
-        throw new ValidationError(`Nome de variável inválido: "${key}". Use letras, números e _ (não pode começar com número).`);
-      }
-      if (seen.has(key)) throw new ValidationError(`Variável duplicada: "${key}".`);
-      seen.add(key);
       result.push({ key, value: item.value ?? "", secret: item.secret === true });
     }
     return result;
   }
 
   private validatePorts(ports: string[]): string[] {
+    throwIfInvalid(portsIssues(ports), "Configuração inválida.");
     const result: string[] = [];
     for (const raw of ports) {
       const value = raw.trim();
       if (value.length === 0) continue;
-      if (!/^\d{1,5}(:\d{1,5})?$/.test(value)) {
-        throw new ValidationError(`Mapeamento de porta inválido: "${value}". Use "portaHost:portaContainer".`);
-      }
-      if (parsePortMappings([value]).length === 0) {
-        throw new ValidationError(`Porta fora do intervalo permitido: "${value}".`);
-      }
       result.push(value);
     }
     return result;

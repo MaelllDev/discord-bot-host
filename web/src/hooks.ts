@@ -1,12 +1,72 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { DependencyList } from "react";
 import { ApiError, api } from "./api.ts";
+import { tActive } from "./i18n/language.ts";
 import type { AppStatus, ContainerResources, StreamLine } from "./types.ts";
 
 export function errorText(error: unknown): string {
   if (error instanceof ApiError) return error.message;
   if (error instanceof Error) return error.message;
   return String(error);
+}
+
+/** Parâmetros que a mensagem traduzida pode receber (`{image}`, `{key}`, …). */
+type ErrorParams = Record<string, string | number>;
+
+function interpolate(template: string, params?: ErrorParams): string {
+  if (!params) return template;
+  return template.replace(/\{(\w+)\}/g, (match, name: string) => (name in params ? String(params[name]) : match));
+}
+
+/**
+ * Interface de um problema devolvido pela API. O backend acumula todos os
+ * problemas de validação em `details.issues`; cada um tem código estável,
+ * mensagem (fallback em português) e parâmetros.
+ */
+export interface ApiIssue {
+  code: string;
+  message: string;
+  params?: ErrorParams;
+  field?: string;
+}
+
+/**
+ * Traduz um problema para o idioma ativo. A chave é `errors.<code>`; quando o
+ * painel não conhece o código (backend mais novo, erro não mapeado), cai para a
+ * mensagem original do backend — nunca fica sem explicação.
+ */
+export function issueText(issue: ApiIssue): string {
+  const key = `errors.${issue.code}`;
+  const translated = tActive(key);
+  if (translated !== key) return interpolate(translated, issue.params);
+  return interpolate(issue.message, issue.params);
+}
+
+/**
+ * Extrai os problemas de validação de um erro da API e os traduz. Devolve a
+ * lista em ordem — a interface mostra todos de uma vez.
+ */
+export function apiIssues(error: unknown): string[] {
+  if (!(error instanceof ApiError)) return [errorText(error)];
+  const details = error.details as { issues?: ApiIssue[] } | undefined;
+  if (Array.isArray(details?.issues) && details.issues.length > 0) {
+    return details.issues.map(issueText);
+  }
+  // Erro de validação simples: tenta traduzir pelo código do próprio erro.
+  if (error.status === 400 && error.code) {
+    const translated = tActive(`errors.${error.code}`);
+    if (translated !== `errors.${error.code}`) return [translated];
+  }
+  return [error.message];
+}
+
+/**
+ * Mensagem pronta para toast: junta os problemas em texto legível. Um só
+ * problema vira uma linha; vários viram lista numerada.
+ */
+export function errorTextRich(error: unknown): string {
+  const issues = apiIssues(error);
+  return issues.length === 1 ? issues[0]! : issues.map((issue, index) => `${index + 1}. ${issue}`).join("\n");
 }
 
 export interface AsyncState<T> {
@@ -198,7 +258,7 @@ export function useAppStream(slug: string | null): AppStream {
             added.push({
               id: counter.current,
               stream: "system",
-              line: "[painel] o container iniciou uma nova execução — histórico anterior limpo",
+              line: tActive("console.newRun"),
             });
           }
           counter.current += 1;

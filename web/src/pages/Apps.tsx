@@ -20,6 +20,7 @@ import {
   cn,
 } from "../components/ui.tsx";
 import AppIcon from "../components/AppIcon.tsx";
+import { useI18n } from "../i18n/index.tsx";
 import { IconApps, IconPlay, IconPlus, IconRestart, IconSearch, IconStop } from "../components/icons.tsx";
 
 type Filter = "all" | "online" | "stopped" | "unknown";
@@ -32,6 +33,7 @@ function matches(app: AppSummary, filter: Filter): boolean {
 }
 
 function RowActions({ app, onChanged }: { app: AppSummary; onChanged: () => void }) {
+  const { t } = useI18n();
   const [busy, setBusy] = useState<string | null>(null);
   const toast = useToast();
   const live = isLive(app.status);
@@ -51,11 +53,11 @@ function RowActions({ app, onChanged }: { app: AppSummary; onChanged: () => void
   return (
     <div className="flex justify-end gap-1">
       {live ? (
-        <Button size="sm" variant="ghost" loading={busy === "stop"} onClick={() => void run("stop")} title="Parar">
+        <Button size="sm" variant="ghost" loading={busy === "stop"} onClick={() => void run("stop")} title={t("actions.stop")}>
           <IconStop className="h-3.5 w-3.5" />
         </Button>
       ) : (
-        <Button size="sm" variant="ghost" loading={busy === "start"} onClick={() => void run("start")} title="Iniciar">
+        <Button size="sm" variant="ghost" loading={busy === "start"} onClick={() => void run("start")} title={t("actions.start")}>
           <IconPlay className="h-3.5 w-3.5" />
         </Button>
       )}
@@ -65,13 +67,13 @@ function RowActions({ app, onChanged }: { app: AppSummary; onChanged: () => void
         loading={busy === "restart"}
         onClick={() => void run("restart")}
         disabled={!live}
-        title="Reiniciar"
+        title={t("actions.restart")}
       >
         <IconRestart className="h-3.5 w-3.5" />
       </Button>
       <Link to={`/apps/${app.slug}`}>
         <Button size="sm" variant="ghost">
-          Abrir
+          {t("apps.open")}
         </Button>
       </Link>
     </div>
@@ -79,6 +81,7 @@ function RowActions({ app, onChanged }: { app: AppSummary; onChanged: () => void
 }
 
 export default function Apps() {
+  const { t } = useI18n();
   const appsState = useAsync(() => api.apps(), [], { pollMs: 5000 });
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -102,13 +105,16 @@ export default function Apps() {
   return (
     <div className="space-y-5">
       <PageHeader
-        title="Aplicações"
+        title={t("nav.apps")}
         icon={<IconApps className="h-4 w-4" />}
-        subtitle={`${apps.length} aplicação(ões) · ${apps.filter((app) => isLive(app.status)).length} em execução`}
+        subtitle={t("apps.subtitle", {
+          total: apps.length,
+          online: apps.filter((app) => isLive(app.status)).length,
+        })}
         actions={
           <Link to="/apps/new">
             <Button variant="primary">
-              <IconPlus className="h-4 w-4" /> Nova aplicação
+              <IconPlus className="h-4 w-4" /> {t("nav.newApp")}
             </Button>
           </Link>
         }
@@ -122,15 +128,15 @@ export default function Apps() {
           <Input
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="buscar por nome, identificador ou runtime…"
+            placeholder={t("apps.search.placeholder")}
             className="pl-9"
           />
         </div>
         <Select value={filter} onChange={(event) => setFilter(event.target.value as Filter)} className="w-auto">
-          <option value="all">Todos os estados</option>
-          <option value="online">Online</option>
-          <option value="stopped">Paradas</option>
-          <option value="unknown">Desconhecidas</option>
+          <option value="all">{t("apps.filter.all")}</option>
+          <option value="online">{t("dashboard.kpi.online")}</option>
+          <option value="stopped">{t("dashboard.kpi.stopped")}</option>
+          <option value="unknown">{t("dashboard.kpi.unknown")}</option>
         </Select>
       </div>
 
@@ -142,12 +148,12 @@ export default function Apps() {
 
       {!loading && apps.length === 0 ? (
         <EmptyState
-          title="Nenhuma aplicação ainda"
-          description="Crie a primeira aplicação enviando um ZIP com o código do seu bot."
+          title={t("apps.empty.title")}
+          description={t("apps.empty.description")}
           action={
             <Link to="/apps/new">
               <Button variant="primary">
-                <IconPlus className="h-4 w-4" /> Nova aplicação
+                <IconPlus className="h-4 w-4" /> {t("nav.newApp")}
               </Button>
             </Link>
           }
@@ -155,7 +161,7 @@ export default function Apps() {
       ) : null}
 
       {!loading && apps.length > 0 && visible.length === 0 ? (
-        <EmptyState title="Nenhum resultado" description="Ajuste a busca ou o filtro de estado." />
+        <EmptyState title={t("apps.noResults.title")} description={t("apps.noResults.description")} />
       ) : null}
 
       {/* Tabela (desktop) */}
@@ -165,15 +171,15 @@ export default function Apps() {
             <table className="w-full text-left text-xs">
               <thead className="border-b border-white/8 text-[10.5px] uppercase tracking-wider text-slate-500">
                 <tr>
-                  <th className="px-5 py-3.5 font-semibold">Aplicação</th>
-                  <th className="px-3 py-3 font-medium">Estado</th>
-                  <th className="px-3 py-3 font-medium">Runtime</th>
-                  <th className="px-3 py-3 font-medium">Versão</th>
+                  <th className="px-5 py-3.5 font-semibold">{t("apps.table.app")}</th>
+                  <th className="px-3 py-3 font-medium">{t("apps.table.state")}</th>
+                  <th className="px-3 py-3 font-medium">{t("config.runtime")}</th>
+                  <th className="px-3 py-3 font-medium">{t("apps.table.version")}</th>
                   <th className="px-3 py-3 font-medium">RAM</th>
                   <th className="px-3 py-3 font-medium">CPU</th>
-                  <th className="px-3 py-3 font-medium">Uso agora</th>
-                  <th className="px-3 py-3 font-medium">Atualizada</th>
-                  <th className="px-3 py-3 text-right font-medium">Ações</th>
+                  <th className="px-3 py-3 font-medium">{t("apps.table.usage")}</th>
+                  <th className="px-3 py-3 font-medium">{t("apps.table.updated")}</th>
+                  <th className="px-3 py-3 text-right font-medium">{t("apps.table.actions")}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-white/6">
@@ -198,7 +204,7 @@ export default function Apps() {
                       {app.activeRelease > 0 ? (
                         <Badge tone="indigo">v{app.activeRelease}</Badge>
                       ) : (
-                        <Badge tone="amber">sem versão</Badge>
+                        <Badge tone="amber">{t("apps.noVersion")}</Badge>
                       )}
                     </td>
                     <td className="px-3 py-3 font-mono text-slate-300">{humanRam(app.memoryMb)}</td>

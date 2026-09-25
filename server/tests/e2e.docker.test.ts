@@ -470,6 +470,25 @@ suite("ciclo de vida completo com Docker", () => {
     await fs.rm(workDir, { recursive: true, force: true });
   }, 120_000);
 
+  it("recusa criar aplicação com imagem Docker que não existe", async () => {
+    // Docker Hub responde "denied" (401/403) para repositório inexistente: é o
+    // erro de digitação clássico que antes só aparecia como deploy falho.
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/apps",
+      headers: { cookie },
+      payload: {
+        name: "Bot Imagem Ruim",
+        runtime: "node",
+        image: "nao-existe-nem-no-hub-xyz123/nope:naotem",
+      },
+    });
+    expect(response.statusCode).toBe(400);
+    const body = response.json();
+    expect(body.code).toBe("validation.composite");
+    expect(body.details.issues.map((issue: { code: string }) => issue.code)).toContain("image.notFound");
+  });
+
   it("cria a aplicação, instala as dependências Node.js e sobe o container", async () => {
     const created = await json<{ app: { slug: string } }>("/api/apps", {
       method: "POST",

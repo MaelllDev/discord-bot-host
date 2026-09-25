@@ -196,6 +196,45 @@ export class DockerService {
     }
   }
 
+  /**
+   * Confere se a imagem é utilizável. Primeiro no daemon local (imagens já
+   * baixadas ou buildadas na própria VPS valem sempre); se não há cópia local,
+   * pergunta ao registry (`GET /distribution/{ref}/json`). É o que permite o
+   * painel dizer na hora da criação "essa imagem não existe" — em vez de deixar
+   * criar e a aplicação falhar depois no deploy, com um pull que nunca converge.
+   *
+   * Resultados:
+   * - `"ok"` — existe localmente, ou o registry confirmou o manifesto.
+   * - `"missing"` — sem cópia local e o registry respondeu que não conhece a
+   *   referência.
+   * - `"indeterminate"` — não foi possível checar (Docker fora, registry
+   *   inacessível, rate limit, rede). NÃO bloqueia: criar segue permitido.
+   */
+  async imageExists(image: string): Promise<"ok" | "missing" | "indeterminate"> {
+    try {
+      await this.request(() => this.docker.getImage(image).inspect());
+      return "ok";
+    } catch (error) {
+      if (isDockerUnavailable(error)) return "indeterminate";
+      if (statusCodeOf(error) !== 404) return "indeterminate";
+      // 404 local: pode ser uma imagem que só existe no registry.
+    }
+    try {
+      await this.request(() => this.docker.getImage(image).distribution());
+      return "ok";
+    } catch (error) {
+      if (isDockerUnavailable(error)) return "indeterminate";
+      const statusCode = statusCodeOf(error);
+      // Docker Hub responde 401/403 ("denied") para repositório inexistente OU
+      // privado — e o painel puxa imagens sem credenciais, então nos dois casos
+      // o `docker pull` do deploy falharia do mesmo jeito. 404 acontece em
+      // outros registries. 429 (rate limit) e 5xx são inconclusivos: não
+      // bloqueiam a criação.
+      if (statusCode === 404 || statusCode === 401 || statusCode === 403) return "missing";
+      return "indeterminate";
+    }
+  }
+
   async listImages(): Promise<string[]> {
     try {
       const images = await this.request(() => this.docker.listImages());

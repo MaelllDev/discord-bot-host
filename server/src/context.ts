@@ -4,8 +4,10 @@ import type { DockerService } from "./docker/service.ts";
 import type { AppService } from "./apps/service.ts";
 import type { FileService } from "./apps/files.ts";
 import type { UploadStore } from "./apps/uploads.ts";
+import type { ImageStore } from "./apps/images.ts";
 import type { BackupService } from "./apps/backups.ts";
 import type { AiService } from "./ai/service.ts";
+import type { NotifyService } from "./notify/webhooks.ts";
 import type { LoginThrottle, PasswordSource } from "./auth.ts";
 
 export interface AppContext {
@@ -17,6 +19,8 @@ export interface AppContext {
   ai: AiService;
   files: FileService;
   uploads: UploadStore;
+  images: ImageStore;
+  notify: NotifyService;
   password: PasswordSource;
   throttle: LoginThrottle;
   /** Geração atual das sessões (incrementada a cada logout). */

@@ -8,6 +8,7 @@ import { formatDateTime, relativeTime } from "../format.ts";
 import { Alert, Badge, Button, Field, InlineCode, Modal, Spinner, Textarea } from "./ui.tsx";
 import { IconAlert, IconCopy, IconSparkles, IconTrash } from "./icons.tsx";
 import { useToast } from "./Toasts.tsx";
+import { useI18n } from "../i18n/index.tsx";
 
 const POLL_MS = 1500;
 
@@ -104,6 +105,7 @@ function AnalysisText({ text }: { text: string }) {
 }
 
 function AnalysisResult({ analysis, onCopy }: { analysis: AiAnalysis; onCopy: (text: string) => void }) {
+  const { t } = useI18n();
   const [showExcerpt, setShowExcerpt] = useState(false);
   return (
     <div className="space-y-3">
@@ -111,7 +113,7 @@ function AnalysisResult({ analysis, onCopy }: { analysis: AiAnalysis; onCopy: (t
         <Badge tone="indigo">
           <IconSparkles className="h-3 w-3" /> {analysis.provider} · {analysis.model}
         </Badge>
-        <span>{analysis.lineCount} linha(s) enviadas</span>
+        <span>{t("ai.sent", { count: analysis.lineCount })}</span>
         <span>· {relativeTime(analysis.createdAt)}</span>
         {analysis.question ? <span className="truncate">· “{analysis.question}”</span> : null}
         <button
@@ -119,17 +121,17 @@ function AnalysisResult({ analysis, onCopy }: { analysis: AiAnalysis; onCopy: (t
           onClick={() => onCopy(analysis.result)}
           className="ml-auto inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] text-slate-400 transition hover:bg-white/5 hover:text-slate-200"
         >
-          <IconCopy className="h-3 w-3" /> copiar
+          <IconCopy className="h-3 w-3" /> {t("ai.copy")}
         </button>
       </div>
 
       {analysis.status === "running" ? (
         <div className="flex items-center gap-2 rounded-lg border border-white/10 bg-slate-950/60 px-3 py-6 text-xs text-slate-400">
-          <Spinner className="h-4 w-4" /> consultando o modelo… isso pode levar alguns segundos.
+          <Spinner className="h-4 w-4" /> {t("ai.loadingModel")}
         </div>
       ) : analysis.status === "failed" ? (
         <Alert tone="red" icon={<IconAlert className="h-3.5 w-3.5" />}>
-          {analysis.error || "A análise falhou."}
+          {analysis.error || t("ai.failed")}
         </Alert>
       ) : (
         <div className="rounded-lg border border-white/10 bg-slate-950/40 p-3">
@@ -143,7 +145,7 @@ function AnalysisResult({ analysis, onCopy }: { analysis: AiAnalysis; onCopy: (t
           className="text-[11px] text-slate-400 transition hover:text-slate-200"
           onClick={() => setShowExcerpt((value) => !value)}
         >
-          {showExcerpt ? "▾" : "▸"} ver o trecho de log que foi enviado (credenciais mascaradas)
+          {showExcerpt ? "▾" : "▸"} {t("ai.excerpt.show")}
         </button>
         {showExcerpt ? (
           <pre className="terminal mt-2 max-h-64 overflow-auto whitespace-pre-wrap text-slate-400">{analysis.excerpt}</pre>
@@ -172,6 +174,7 @@ export default function AiAnalyzeDialog({
   open: boolean;
   onClose: () => void;
 }) {
+  const { t } = useI18n();
   const toast = useToast();
   const [question, setQuestion] = useState("");
   const [enabled, setEnabled] = useState<boolean | null>(null);
@@ -246,7 +249,7 @@ export default function AiAnalyzeDialog({
       const { analysis } = await api.aiAnalyze(slug, logs, question);
       setCurrent(analysis);
       setHistory((previous) => [analysis, ...previous]);
-      toast.success("Análise enviada ao provedor de IA.");
+      toast.success(t("ai.sent.ok"));
     } catch (caught) {
       const message = errorText(caught);
       setError(message);
@@ -261,7 +264,7 @@ export default function AiAnalyzeDialog({
       await api.deleteAiAnalysis(analysis.id);
       setHistory((previous) => previous.filter((item) => item.id !== analysis.id));
       setCurrent((value) => (value?.id === analysis.id ? null : value));
-      toast.success("Análise removida.");
+      toast.success(t("ai.removed"));
     } catch (caught) {
       toast.error(errorText(caught));
     }
@@ -270,40 +273,41 @@ export default function AiAnalyzeDialog({
   const copy = async (text: string): Promise<void> => {
     try {
       await navigator.clipboard.writeText(text);
-      toast.success("Análise copiada.");
+      toast.success(t("ai.copied"));
     } catch {
-      toast.error("Não foi possível copiar — selecione o texto manualmente.");
+      toast.error(t("ai.copyFailed"));
     }
   };
 
   return (
-    <Modal open={open} title={`Analisar logs com IA — ${appName}`} onClose={onClose} wide>
+    <Modal open={open} title={t("ai.dialog.title", { name: appName })} onClose={onClose} wide>
       <div className="space-y-4">
         {enabled === false ? (
           <Alert tone="amber" icon={<IconAlert className="h-3.5 w-3.5" />}>
-            A análise com IA está desativada. Configure o provedor e a sua chave em{" "}
+            {t("ai.disabled.before")}{" "}
             <Link to="/settings" className="underline hover:text-amber-100" onClick={onClose}>
-              Configurações → Análise de logs com IA
+              {t("ai.disabled.link")}
             </Link>
             .
           </Alert>
         ) : (
           <Alert tone="slate" icon={<IconAlert className="h-3.5 w-3.5" />}>
-            Serão enviadas as últimas <strong>{maxLines}</strong> linhas do que está na tela ({lineCount} disponíveis) para{" "}
-            <strong>{providerLabel || "o provedor configurado"}</strong>
-            {model ? ` (${model})` : ""}. Tokens, chaves e senhas são mascarados antes do envio — ainda assim, revise se os
-            logs contêm algo que você não quer compartilhar.
+            {t("ai.intro.before")} <strong>{maxLines}</strong>{" "}
+            {t("ai.intro.middle", { count: lineCount })}{" "}
+            <strong>{providerLabel || t("ai.intro.provider")}</strong>
+            {model ? ` (${model})` : ""}
+            {t("ai.intro.after")}
           </Alert>
         )}
 
         {error ? <Alert tone="red">{error}</Alert> : null}
 
-        <Field label="Pergunta (opcional)" hint="Deixe em branco para pedir um diagnóstico geral do que está errado.">
+        <Field label={t("ai.question")} hint={t("ai.question.hint")}>
           <Textarea
             rows={2}
             value={question}
             onChange={(event) => setQuestion(event.target.value)}
-            placeholder="Ex.: por que o bot reinicia de tempo em tempo?"
+            placeholder={t("ai.question.placeholder")}
             maxLength={500}
           />
         </Field>
@@ -315,16 +319,12 @@ export default function AiAnalyzeDialog({
             disabled={enabled !== true || logs.trim().length === 0}
             onClick={() => void analyze()}
           >
-            <IconSparkles className="h-3.5 w-3.5" /> Analisar com IA
+            <IconSparkles className="h-3.5 w-3.5" /> {t("ai.analyze")}
           </Button>
           {lineCount === 0 ? (
-            <span className="text-[11px] text-amber-300">
-              Não há linhas na tela ainda — rode a aplicação e tente de novo.
-            </span>
+            <span className="text-[11px] text-amber-300">{t("ai.noLines")}</span>
           ) : (
-            <span className="text-[11px] text-slate-500">
-              O resultado fica salvo nesta aplicação e pode ser reaberto depois.
-            </span>
+            <span className="text-[11px] text-slate-500">{t("ai.savedHint")}</span>
           )}
         </div>
 
@@ -336,14 +336,20 @@ export default function AiAnalyzeDialog({
 
         {history.length > 1 ? (
           <div className="space-y-2">
-            <p className="text-xs font-medium text-slate-300">Análises anteriores</p>
+            <p className="text-xs font-medium text-slate-300">{t("ai.previous")}</p>
             <ul className="divide-y divide-white/5 rounded-lg border border-white/5">
               {history
                 .filter((item) => item.id !== current?.id)
                 .map((item) => (
                   <li key={item.id} className="flex flex-wrap items-center gap-2 px-3 py-2 text-xs">
                     <Badge tone={item.status === "success" ? "green" : item.status === "failed" ? "red" : "amber"}>
-                      {item.status === "success" ? "concluída" : item.status === "failed" ? "falhou" : "em andamento"}
+                      {t(
+                        item.status === "success"
+                          ? "ai.status.success"
+                          : item.status === "failed"
+                            ? "ai.status.failed"
+                            : "ai.status.running",
+                      )}
                     </Badge>
                     <span className="text-slate-300">
                       {item.provider} · {item.model}
@@ -352,13 +358,13 @@ export default function AiAnalyzeDialog({
                     {item.question ? <span className="truncate text-slate-400">“{item.question}”</span> : null}
                     <div className="ml-auto flex gap-1">
                       <Button size="sm" variant="ghost" onClick={() => setCurrent(item)}>
-                        ver
+                        {t("ai.view")}
                       </Button>
                       <Button
                         size="sm"
                         variant="ghost"
                         onClick={() => void remove(item)}
-                        title="Remover análise"
+                        title={t("ai.remove.title")}
                       >
                         <IconTrash className="h-3.5 w-3.5" />
                       </Button>
@@ -370,8 +376,8 @@ export default function AiAnalyzeDialog({
         ) : null}
 
         <p className="text-[11px] text-slate-500">
-          A chamada é feita pelo servidor do painel, direto ao provedor escolhido, usando a chave salva em{" "}
-          <InlineCode>/api/ai/settings</InlineCode>. Nada é enviado sem você clicar em analisar.
+          {t("ai.footer.before")} <InlineCode>/api/ai/settings</InlineCode>
+          {t("ai.footer.after")}
         </p>
       </div>
     </Modal>

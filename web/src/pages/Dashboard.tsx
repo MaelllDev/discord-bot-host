@@ -4,6 +4,7 @@ import { api } from "../api.ts";
 import { useAsync } from "../hooks.ts";
 import { humanBytes, humanCpu, humanDuration, humanRam, relativeTime } from "../format.ts";
 import AppCard, { isLive } from "../components/AppCard.tsx";
+import { useI18n } from "../i18n/index.tsx";
 import {
   Alert,
   Badge,
@@ -35,6 +36,7 @@ import {
 } from "../components/icons.tsx";
 
 export default function Dashboard() {
+  const { t } = useI18n();
   const appsState = useAsync(() => api.apps(), [], { pollMs: 5000 });
   const systemState = useAsync(() => api.system(), [], { pollMs: 15_000 });
   const eventsState = useAsync(() => api.events(12), [], { pollMs: 20_000 });
@@ -69,17 +71,23 @@ export default function Dashboard() {
   return (
     <div className="space-y-6">
       <PageHeader
-        title="Dashboard"
+        title={t("nav.dashboard")}
         subtitle={
           system
-            ? `${system.apps.total} aplicação(ões) · Docker ${system.docker.version ?? "?"} · host ${system.host.platform}`
-            : "carregando informações do sistema…"
+            ? t("dashboard.subtitle", {
+                apps: system.apps.total,
+                docker: system.docker.version ?? "?",
+                host: system.host.platform,
+              })
+            : t("dashboard.loadingSystem")
         }
         icon={<IconActivity className="h-4 w-4" />}
         actions={
           <>
             {lastSync ? (
-              <span className="hidden text-[11px] text-slate-500 sm:inline">sincronizado {relativeTime(lastSync)}</span>
+              <span className="hidden text-[11px] text-slate-500 sm:inline">
+                {t("dashboard.synced", { value: relativeTime(lastSync) })}
+              </span>
             ) : null}
             <Button
               variant="outline"
@@ -89,7 +97,7 @@ export default function Dashboard() {
                 void systemState.reload();
               }}
             >
-              Atualizar
+              {t("common.refresh")}
             </Button>
           </>
         }
@@ -97,38 +105,39 @@ export default function Dashboard() {
 
       {!dockerOk ? (
         <Alert tone="red" icon={<IconAlert className="h-3.5 w-3.5" />}>
-          O Docker não está acessível. O estado real das aplicações é <strong>desconhecido</strong> — o painel não
-          consegue falar com <code>{system?.config.dockerSocket ?? "/var/run/docker.sock"}</code>. Use{" "}
-          <code>systemctl status docker</code> na VPS. Os botões de controle ficam indisponíveis até o daemon voltar.
+          {t("dashboard.dockerDown.before")} <strong>{t("status.unknown").toLowerCase()}</strong>{" "}
+          {t("dashboard.dockerDown.middle")}{" "}
+          <code>{system?.config.dockerSocket ?? "/var/run/docker.sock"}</code>. {t("dashboard.dockerDown.use")}{" "}
+          <code>systemctl status docker</code> {t("dashboard.dockerDown.after")}
         </Alert>
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Kpi
-          label="Aplicações"
+          label={t("nav.apps")}
           value={apps.length}
-          hint={`${system?.apps.total ?? apps.length} registradas`}
+          hint={t("dashboard.kpi.apps.hint", { count: system?.apps.total ?? apps.length })}
           icon={<IconApps className="h-4 w-4" />}
           tone="neutral"
         />
         <Kpi
-          label="Online"
+          label={t("dashboard.kpi.online")}
           value={online}
-          hint="em execução ou subindo"
+          hint={t("dashboard.kpi.online.hint")}
           icon={<IconActivity className="h-4 w-4" />}
           tone="green"
         />
         <Kpi
-          label="Paradas"
+          label={t("dashboard.kpi.stopped")}
           value={stopped}
-          hint="paradas manualmente ou encerradas"
+          hint={t("dashboard.kpi.stopped.hint")}
           icon={<IconAlert className="h-4 w-4" />}
           tone="amber"
         />
         <Kpi
-          label="Desconhecidas"
+          label={t("dashboard.kpi.unknown")}
           value={unknown}
-          hint={unknown > 0 ? "Docker inacessível: estado real desconhecido" : "nenhuma"}
+          hint={unknown > 0 ? t("dashboard.kpi.unknown.hint") : t("overview.none")}
           icon={<IconAlert className="h-4 w-4" />}
           tone={unknown > 0 ? "red" : "neutral"}
         />
@@ -136,44 +145,44 @@ export default function Dashboard() {
 
       {!loading && apps.length === 0 ? (
         <Hero
-          badge="Primeiros passos"
-          title="Hospede seus bots e aplicações nesta VPS"
-          description="Envie um ZIP com o código, confirme o runtime detectado e o painel cuida do resto: dependências, container isolado, limites de CPU e RAM, logs ao vivo, versões com rollback e backups."
+        badge={t("dashboard.hero.badge")}
+        title={t("dashboard.hero.title")}
+        description={t("dashboard.hero.description")}
           actions={
             <>
               <Link to="/apps/new">
                 <Button variant="primary">
-                  <IconPlus className="h-4 w-4" /> Criar aplicação
+                  <IconPlus className="h-4 w-4" /> {t("dashboard.hero.create")}
                 </Button>
               </Link>
               <Link to="/system">
                 <Button variant="outline">
-                  <IconServer className="h-4 w-4" /> Ver o sistema
+                  <IconServer className="h-4 w-4" /> {t("dashboard.hero.viewSystem")}
                 </Button>
               </Link>
             </>
           }
-          footnote="Tudo roda na sua própria VPS — nenhum serviço externo é necessário."
+          footnote={t("dashboard.hero.footnote")}
         >
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
             <FeatureTile
-              title="Deploy por ZIP"
-              description="Upload do projeto inteiro, com progresso e detecção automática do runtime."
+          title={t("dashboard.feature.zip.title")}
+          description={t("dashboard.feature.zip.description")}
               icon={<IconLayers className="h-4 w-4" />}
             />
             <FeatureTile
-              title="Container isolado"
-              description="Cada aplicação em seu próprio container, com limites de CPU, RAM e processos."
+          title={t("dashboard.feature.isolated.title")}
+          description={t("dashboard.feature.isolated.description")}
               icon={<IconApps className="h-4 w-4" />}
             />
             <FeatureTile
-              title="Versões e rollback"
-              description="Releases imutáveis: volte para a versão anterior sem perder os dados de /data."
+          title={t("dashboard.feature.versions.title")}
+          description={t("dashboard.feature.versions.description")}
               icon={<IconArchive className="h-4 w-4" />}
             />
             <FeatureTile
-              title="IA nos logs"
-              description="Análise opcional das últimas linhas com o provedor de IA que você configurar."
+          title={t("dashboard.feature.ai.title")}
+          description={t("dashboard.feature.ai.description")}
               icon={<IconSparkles className="h-4 w-4" />}
             />
           </div>
@@ -182,80 +191,101 @@ export default function Dashboard() {
 
       <div className="grid gap-4 lg:grid-cols-3">
         <Card
-          title="Uso das aplicações"
-          subtitle="Somatório do consumo real reportado pelos containers"
+          title={t("dashboard.usage.title")}
+          subtitle={t("dashboard.usage.hint")}
           icon={<IconCpu className="h-4 w-4" />}
           className="lg:col-span-2"
         >
           <div className="grid gap-5 sm:grid-cols-2">
             <Meter
-              label="CPU em uso"
-              value={dockerOk ? `${cpuInUse.toFixed(1)}%` : "indisponível"}
+              label={t("dashboard.usage.cpu")}
+              value={dockerOk ? `${cpuInUse.toFixed(1)}%` : t("common.unavailable")}
               hint={
                 hostCpu !== null
-                  ? `VPS com ${hostCpu} núcleo(s) · carga média ${system?.host.loadAverage[0]?.toFixed(2) ?? "—"}`
+                  ? t("dashboard.usage.coresHint", {
+                      count: hostCpu,
+                      load: system?.host.loadAverage[0]?.toFixed(2) ?? "—",
+                    })
                   : undefined
               }
               percent={hostCpu ? Math.min(100, (cpuInUse / 100 / hostCpu) * 100) : 0}
               tone={cpuInUse > 80 ? "amber" : "indigo"}
             />
             <Meter
-              label="Memória em uso"
-              value={dockerOk ? humanBytes(memoryInUse) : "indisponível"}
-              hint={hostMemory !== null ? `de ${humanBytes(hostMemory)} na VPS` : undefined}
+              label={t("dashboard.usage.memory")}
+              value={dockerOk ? humanBytes(memoryInUse) : t("common.unavailable")}
+              hint={hostMemory !== null ? t("dashboard.usage.hostHint", { value: humanBytes(hostMemory) }) : undefined}
               percent={hostMemory ? Math.min(100, (memoryInUse / hostMemory) * 100) : 0}
               tone="green"
             />
           </div>
           <div className="mt-5 flex flex-wrap gap-2 text-[11px] text-slate-500">
             <Badge tone="indigo">
-              <IconCpu className="h-3 w-3" /> {humanCpu(apps.reduce((total, app) => total + app.cpu, 0))} alocados
+              <IconCpu className="h-3 w-3" />{" "}
+              {t("dashboard.usage.allocatedCpu", { value: humanCpu(apps.reduce((total, app) => total + app.cpu, 0)) })}
             </Badge>
             <Badge tone="indigo">
-              <IconMemory className="h-3 w-3" /> {humanRam(apps.reduce((total, app) => total + app.memoryMb, 0))}{" "}
-              alocados
+              <IconMemory className="h-3 w-3" />{" "}
+              {t("dashboard.usage.allocatedRam", {
+                value: humanRam(apps.reduce((total, app) => total + app.memoryMb, 0)),
+              })}
             </Badge>
             {system?.host.disk ? (
               <Badge>
-                <IconDisk className="h-3 w-3" /> dados: {humanBytes(system.host.disk.usedBytes)} de{" "}
-                {humanBytes(system.host.disk.totalBytes)}
+                <IconDisk className="h-3 w-3" />{" "}
+                {t("dashboard.usage.diskBadge", {
+                  used: humanBytes(system.host.disk.usedBytes),
+                  total: humanBytes(system.host.disk.totalBytes),
+                })}
               </Badge>
             ) : null}
           </div>
         </Card>
 
-        <Card title="Capacidade da VPS" subtitle="Recursos do host que executa o painel" icon={<IconServer className="h-4 w-4" />}>
+        <Card
+        title={t("dashboard.capacity.title")}
+        subtitle={t("dashboard.capacity.hint")}
+        icon={<IconServer className="h-4 w-4" />}
+      >
           {system ? (
             <div className="space-y-5">
               <Meter
-                label="CPU"
-                value={`${system.host.cpuCount} núcleo(s)`}
+                label={t("metric.cpu")}
+                value={t("dashboard.cores", { count: system.host.cpuCount })}
                 hint={system.host.cpuModel ?? undefined}
                 percent={Math.min(100, ((system.host.loadAverage[0] ?? 0) / Math.max(system.host.cpuCount, 1)) * 100)}
                 tone="sky"
               />
               <Meter
-                label="Memória"
+                label={t("metric.memory")}
                 value={
-                  hostMemoryUsed !== null ? `${humanBytes(hostMemoryUsed)} de ${humanBytes(hostMemory)}` : "—"
+                  hostMemoryUsed !== null
+                    ? t("metric.ofLimit", {
+                        used: humanBytes(hostMemoryUsed),
+                        limit: humanBytes(hostMemory),
+                      })
+                    : "—"
                 }
                 percent={hostMemory ? ((hostMemoryUsed ?? 0) / hostMemory) * 100 : 0}
                 tone={hostMemory && (hostMemoryUsed ?? 0) / hostMemory > 0.85 ? "red" : "green"}
               />
               {system.host.disk ? (
                 <Meter
-                  label="Disco do painel"
+                  label={t("dashboard.disk")}
                   value={`${humanBytes(system.host.disk.usedBytes)} de ${humanBytes(system.host.disk.totalBytes)}`}
                   hint={<span className="font-mono">{system.host.disk.path}</span>}
                   percent={(system.host.disk.usedBytes / Math.max(system.host.disk.totalBytes, 1)) * 100}
                   tone={system.host.disk.usedBytes / system.host.disk.totalBytes > 0.9 ? "red" : "indigo"}
                 />
               ) : (
-                <p className="text-[11px] text-slate-500">Informação de disco indisponível neste sistema.</p>
+                <p className="text-[11px] text-slate-500">{t("dashboard.diskUnavailable")}</p>
               )}
               <p className="text-[11px] text-slate-500">
-                Painel v{system.panel.version ?? "?"} · Node {system.panel.nodeVersion} · no ar há{" "}
-                {humanDuration(system.panel.uptimeSeconds)}
+          {t("dashboard.panelLine", {
+            version: system.panel.version ?? "?",
+            node: system.panel.nodeVersion,
+            uptime: humanDuration(system.panel.uptimeSeconds),
+          })}
               </p>
             </div>
           ) : (
@@ -270,11 +300,11 @@ export default function Dashboard() {
 
       <section className="space-y-4">
         <SectionHeader
-          title="Aplicações"
-          hint={apps.length > 0 ? `${apps.length} hospedada(s) nesta instância` : undefined}
+          title={t("nav.apps")}
+          hint={apps.length > 0 ? t("dashboard.appsHint", { count: apps.length }) : undefined}
           action={
             <Link to="/apps" className="text-[11px] font-medium text-indigo-300 transition-colors hover:text-indigo-200">
-              ver todas →
+              {t("dashboard.viewAll")}
             </Link>
           }
         />
@@ -289,12 +319,12 @@ export default function Dashboard() {
 
         {!loading && apps.length === 0 ? (
           <EmptyState
-            title="Nenhuma aplicação hospedada ainda"
-            description="Envie o ZIP do seu bot, confirme o runtime e o painel cuida de instalar as dependências, rodar 24/7 com limites de RAM/CPU e manter o histórico de versões."
+        title={t("dashboard.empty.title")}
+        description={t("dashboard.empty.description")}
             action={
               <Link to="/apps/new">
                 <Button variant="primary">
-                  <IconPlus className="h-4 w-4" /> Criar a primeira aplicação
+                  <IconPlus className="h-4 w-4" /> {t("dashboard.empty.create")}
                 </Button>
               </Link>
             }
@@ -310,7 +340,12 @@ export default function Dashboard() {
         ) : null}
       </section>
 
-      <Card title="Atividade recente" subtitle="Eventos registrados pelo painel" bodyClassName="p-0" icon={<IconActivity className="h-4 w-4" />}>
+      <Card
+        title={t("dashboard.activity.title")}
+        subtitle={t("dashboard.activity.hint")}
+        bodyClassName="p-0"
+        icon={<IconActivity className="h-4 w-4" />}
+      >
         <ul className="divide-y divide-white/6">
           {(eventsState.data?.events ?? []).map((event) => (
             <li key={event.id} className="flex items-start gap-3 px-5 py-3 text-xs transition-colors hover:bg-white/[0.02]">
@@ -325,7 +360,7 @@ export default function Dashboard() {
             </li>
           ))}
           {(eventsState.data?.events.length ?? 0) === 0 ? (
-            <li className="px-5 py-5 text-xs text-slate-500">Nenhum evento registrado ainda.</li>
+            <li className="px-5 py-5 text-xs text-slate-500">{t("dashboard.activity.empty")}</li>
           ) : null}
         </ul>
       </Card>

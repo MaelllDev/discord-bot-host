@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api } from "../../api.ts";
 import { errorText, useAsync } from "../../hooks.ts";
+import { useI18n } from "../../i18n/index.tsx";
 import type { AppSummary, BackupRecord } from "../../types.ts";
 import { formatDateTime, humanBytes, relativeTime } from "../../format.ts";
 import { Alert, Badge, Button, Card, SkeletonRows, Toggle } from "../ui.tsx";
@@ -23,6 +24,7 @@ function statusBadge(backup: BackupRecord) {
  */
 export default function BackupsPanel({ app, embedded = false }: { app: AppSummary; embedded?: boolean }) {
   const toast = useToast();
+  const { t } = useI18n();
   const [includeData, setIncludeData] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -61,7 +63,7 @@ export default function BackupsPanel({ app, embedded = false }: { app: AppSummar
     setError(null);
     try {
       await api.deleteBackup(app.slug, backup.id);
-      toast.success("Backup excluído.");
+      toast.success(t("backups.deleted"));
       await state.reload();
     } catch (caught) {
       const message = errorText(caught);
@@ -82,32 +84,29 @@ export default function BackupsPanel({ app, embedded = false }: { app: AppSummar
           disabled={busy === "create"}
           label={
             <span>
-              Incluir dados persistentes (<span className="font-mono">/data</span>)
-              <span className="block text-[11px] text-slate-500">
-                Desmarque para guardar apenas o código do release ativo.
-              </span>
+              {t("backups.includeData")} (<span className="font-mono">/data</span>)
+              <span className="block text-[11px] text-slate-500">{t("backups.includeData.hint")}</span>
             </span>
           }
         />
         <Button variant="primary" size="sm" loading={busy === "create"} onClick={() => void create()}>
-          <IconArchive className="h-3.5 w-3.5" /> Criar backup
+          <IconArchive className="h-3.5 w-3.5" /> {t("backups.create")}
         </Button>
       </div>
 
       {error ? <Alert tone="red">{error}</Alert> : null}
 
       <p className="text-[11px] leading-relaxed text-slate-500">
-        O ZIP guarda o código do release ativo desta aplicação e, se marcado, o volume{" "}
-        <span className="font-mono">/data</span>. As pastas de dependências (<span className="font-mono">node_modules</span>,{" "}
-        <span className="font-mono">.botpanel-py</span>) ficam de fora porque o deploy as recria. Os arquivos ficam no
-        servidor, na pasta da aplicação.
+        {t("backups.explain.before")} <span className="font-mono">/data</span>{" "}
+        {t("backups.explain.middle")} (<span className="font-mono">node_modules</span>,{" "}
+        <span className="font-mono">.botpanel-py</span>) {t("backups.explain.after")}
       </p>
 
       {state.loading && state.data === null ? (
         <SkeletonRows rows={3} />
       ) : list.length === 0 ? (
         <p className="rounded-lg border border-dashed border-white/10 px-4 py-6 text-center text-xs text-slate-500">
-          Nenhum backup ainda. Clique em <strong>Criar backup</strong> para gerar o primeiro.
+          {t("backups.empty.before")} <strong>{t("backups.create")}</strong> {t("backups.empty.after")}
         </p>
       ) : (
         <ul className="divide-y divide-white/5 rounded-lg border border-white/5">
@@ -118,10 +117,19 @@ export default function BackupsPanel({ app, embedded = false }: { app: AppSummar
                   <span className="truncate font-mono">{backup.fileName}</span>
                   {statusBadge(backup)}
                   {backup.releaseSeq ? <Badge tone="indigo">v{backup.releaseSeq}</Badge> : null}
-                  {backup.includeData ? <Badge>com /data</Badge> : <Badge>só código</Badge>}
+                  {backup.includeData ? (
+                    <Badge>{t("backups.withData")}</Badge>
+                  ) : (
+                    <Badge>{t("backups.codeOnly")}</Badge>
+                  )}
                 </p>
                 <p className="mt-0.5 text-[11px] text-slate-500">
-                  {backup.status === "success" ? humanBytes(backup.sizeBytes) : backup.status === "running" ? "calculando…" : "—"} ·{" "}
+                  {backup.status === "success"
+                    ? humanBytes(backup.sizeBytes)
+                    : backup.status === "running"
+                      ? t("backups.calculating")
+                      : "—"}{" "}
+                  ·{" "}
                   {formatDateTime(backup.createdAt)} ({relativeTime(backup.createdAt)})
                   {backup.status === "failed" && backup.message ? ` · ${backup.message}` : ""}
                 </p>
@@ -133,7 +141,7 @@ export default function BackupsPanel({ app, embedded = false }: { app: AppSummar
                     href={api.backupDownloadUrl(app.slug, backup.id)}
                     className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-medium text-slate-200 transition hover:border-white/20 hover:bg-white/10"
                   >
-                    <IconDownload className="h-3.5 w-3.5" /> Baixar
+                    <IconDownload className="h-3.5 w-3.5" /> {t("common.download")}
                   </a>
                 ) : null}
                 <Button
@@ -143,19 +151,19 @@ export default function BackupsPanel({ app, embedded = false }: { app: AppSummar
                   disabled={backup.status === "running"}
                   onClick={() =>
                     setConfirm({
-                      title: `Excluir o backup "${backup.fileName}"?`,
+                      title: t("backups.confirmDelete.title", { name: backup.fileName }),
                       description: (
                         <p>
-                          O arquivo ZIP será apagado do servidor. Isso não afeta o código nem o{" "}
-                          <span className="font-mono">/data</span> da aplicação.
+                          {t("backups.confirmDelete.before")}{" "}
+                          <span className="font-mono">/data</span> {t("backups.confirmDelete.after")}
                         </p>
                       ),
-                      confirmLabel: "Excluir backup",
+                      confirmLabel: t("backups.confirmDelete.label"),
                       danger: true,
                       run: () => remove(backup),
                     })
                   }
-                  title="Excluir"
+                  title={t("actions.delete")}
                 >
                   <IconTrash className="h-3.5 w-3.5" />
                 </Button>
@@ -167,7 +175,7 @@ export default function BackupsPanel({ app, embedded = false }: { app: AppSummar
 
       <div className="flex justify-end">
         <Button size="sm" onClick={() => void state.reload()}>
-          <IconRefresh className="h-3.5 w-3.5" /> Atualizar
+          <IconRefresh className="h-3.5 w-3.5" /> {t("common.refresh")}
         </Button>
       </div>
 
