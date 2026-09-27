@@ -38,6 +38,26 @@ What it does **not** defend against:
 - Any `401` from the API redirects the interface to the login screen.
 - There is no second factor, no user list and no per-application permission — by design.
 
+### Password recovery
+
+- The **Forgot your password?** entry is always visible on the login screen, but the reset itself is
+  offered **only** when neither `BOTPANEL_PASSWORD` nor `BOTPANEL_PASSWORD_HASH` is set — that is,
+  when the panel itself owns the password (a password generated on first boot, or one already reset
+  through this flow). With the environment variables set, the service owns the credential: the entry
+  explains how to change it on the server, and the token/reset routes are not even registered (`404`).
+- The flow never reveals or logs the current password. The panel issues a **single-use token**
+  (32 random bytes) valid for 15 minutes and writes it to `<BOTPANEL_DATA_DIR>/reset-token` with mode
+  `0600`; only someone with server access can read it. Only the SHA-256 hash of the token is kept in
+  memory, and a pending token is discarded on restart (a leftover file is deleted at boot).
+- Redeeming a token requires a password of at least 8 characters, stores only a `scrypt` hash in the
+  database, deletes `<BOTPANEL_DATA_DIR>/.initial-password` (so the old bootstrap password stops
+  working) and invalidates every open session (`session_epoch`).
+- Invalid, expired and already-used tokens get the **same** error response, and both endpoints are
+  rate limited per client address (token creation: one request per 10 minutes; redemption: six
+  attempts per 15 minutes).
+- The public `GET /api/auth/recover` only answers whether recovery is available — it is what makes
+  the login screen hide the link.
+
 ## Container isolation
 
 Every application gets:

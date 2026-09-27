@@ -81,7 +81,9 @@ does not require restarting the panel.
 
 | Symptom | Cause / fix |
 |---|---|
-| "Invalid password" and you never set one | The generated password is in `/etc/botpanel.env`, in `journalctl -u botpanel \| grep -i senha`, or in `<DATA_DIR>/.initial-password` |
+| "Invalid password" and you never set one | The generated password is in `<DATA_DIR>/.initial-password` (read it on the server: `sudo cat`). With the default installer it is also in `/etc/botpanel.env` |
+| "Invalid password" and no env var is set | Use **Forgot your password?** on the login screen: the panel writes a one-time token to `<DATA_DIR>/reset-token` (valid 15 minutes) and you set a new password with it. The current password is never shown or logged |
+| "Invalid password" and `BOTPANEL_PASSWORD` is set | **Forgot your password?** explains it on screen: the password comes from the service environment file (`/etc/botpanel.env` on a default install). Edit it and run `sudo systemctl restart botpanel` |
 | Login works, then you are logged out immediately | `BOTPANEL_COOKIE_SECURE=1` without HTTPS. Set it to `0` until TLS works |
 | Everyone is logged out after a restart | `BOTPANEL_SECRET` changed (or the `.session-secret` file was deleted). Set a fixed `BOTPANEL_SECRET` to control this |
 | "Too many attempts" | The login throttle is per client address; wait a minute or restart the service |

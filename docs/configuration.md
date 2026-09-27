@@ -20,7 +20,7 @@ Everything except `BOTPANEL_PASSWORD` has a default. The template with comments 
 
 | Variable | Required | Default | Description |
 |---|---|---|---|
-| `BOTPANEL_PASSWORD` | **yes** (in practice) | *(random, generated)* | Password used to log in. When empty, the panel generates one on first boot, logs it and stores it in `<BOTPANEL_DATA_DIR>/.initial-password`. Example: `BOTPANEL_PASSWORD=my-long-panel-password` |
+| `BOTPANEL_PASSWORD` | **yes** (in practice) | *(random, generated)* | Password used to log in. When empty, the panel generates one on first boot and stores it in `<BOTPANEL_DATA_DIR>/.initial-password` (mode `0600`); it is never logged. In that mode the login screen offers **Forgot your password?**, which resets it through a one-time token written to `<BOTPANEL_DATA_DIR>/reset-token`. Example: `BOTPANEL_PASSWORD=my-long-panel-password` |
 | `BOTPANEL_PASSWORD_HASH` | no | – | `scrypt$<salt>$<hash>` alternative to the plain password. Takes precedence when both are set. |
 | `BOTPANEL_SECRET` | no | *(generated)* | Secret used to sign the session cookie (HMAC-SHA256). When empty, a random secret is generated and stored in `<BOTPANEL_DATA_DIR>/.session-secret` (mode `0600`) so sessions survive restarts. Minimum 16 characters. |
 | `BOTPANEL_SESSION_TTL_HOURS` | no | `168` | Session lifetime in hours (7 days). After that the panel returns to the login screen. |

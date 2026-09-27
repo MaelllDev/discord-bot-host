@@ -270,8 +270,9 @@ panel's SQLite database (see [AI log analysis](#ai-log-analysis)).
 
 1. Open `http://<your-server-ip>:8080`.
 2. Log in with `BOTPANEL_PASSWORD`. If you did not set one, the installer generated it — it is in
-   `/etc/botpanel.env` and was printed at the end of the installation. The panel also writes the
-   initial password to `<BOTPANEL_DATA_DIR>/.initial-password` and to the journal.
+   `/etc/botpanel.env` and was printed at the end of the installation. The panel also stores the
+   initial password in `<BOTPANEL_DATA_DIR>/.initial-password` (mode `0600`); it is never written to
+   the journal.
 3. You land on the dashboard. An amber banner appears when the Docker daemon is unreachable.
 
 Sessions are `httpOnly` cookies signed with HMAC-SHA256. Any `401` from the API sends you back to
