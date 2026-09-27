@@ -7,8 +7,10 @@ import { useBranding } from "../branding.tsx";
 import { Badge, Button, cn } from "./ui.tsx";
 import AppIcon from "./AppIcon.tsx";
 import LanguageSwitch from "./LanguageSwitch.tsx";
+import ThemeSwitch from "./ThemeSwitch.tsx";
 import { CreatorCredit, SupportLink } from "./Credits.tsx";
 import RouteErrorBoundary from "./ErrorBoundary.tsx";
+import { UnsavedBarViewport } from "./UnsavedBar.tsx";
 import {
   IconAlert,
   IconApps,
@@ -115,7 +117,7 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
       "group relative flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm font-medium transition-colors duration-200",
       collapsed && "lg:justify-center lg:px-0",
       isActive
-        ? "bg-indigo-500/15 text-white shadow-[inset_0_0_0_1px_rgb(124_92_255/0.22)]"
+        ? "accent-nav-glow bg-indigo-500/15 text-white"
         : "text-slate-400 hover:bg-white/[0.06] hover:text-slate-200",
     );
 
@@ -251,7 +253,7 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
                       "flex h-9 items-center gap-2.5 rounded-md px-2.5 text-sm transition-colors duration-200",
                       collapsed && "lg:justify-center lg:px-0",
                       active
-                        ? "bg-white/[0.07] text-white shadow-[inset_0_0_0_1px_rgb(255_255_255/0.06)]"
+                        ? "tab-active-ring bg-white/[0.07] text-white"
                         : "text-slate-300 hover:bg-white/[0.05] hover:text-slate-100",
                     )}
                   >
@@ -322,7 +324,7 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
             </div>
           )}
 
-          <LanguageSwitch compact className={cn(collapsed && "lg:mx-auto")} />
+          <LanguageSwitch compact direction="up" className={cn(collapsed && "lg:mx-auto")} />
 
           <SupportLink compact iconOnly={collapsed} />
 
@@ -356,7 +358,7 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
         <button
           type="button"
           aria-label={t("nav.closeMenu")}
-          className="fixed inset-0 z-30 bg-slate-950/70 backdrop-blur-sm lg:hidden"
+          className="fixed inset-0 z-30 bg-[var(--bp-scrim)] backdrop-blur-sm lg:hidden"
           onClick={() => setOpen(false)}
         />
       ) : null}
@@ -403,6 +405,7 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
                 <IconAlert className="h-3 w-3" /> {t("panel.dockerOff")}
               </Badge>
             )}
+            <ThemeSwitch compact />
             <LanguageSwitch compact />
             {location.pathname === "/apps/new" ? null : (
               <Link to="/apps/new">
@@ -429,6 +432,8 @@ export default function Layout({ onLogout }: { onLogout: () => void }) {
             </RouteErrorBoundary>
           </div>
         </main>
+        {/* Barra de alterações não salvas: precisa viver dentro do roteador. */}
+        <UnsavedBarViewport />
       </div>
     </div>
   );

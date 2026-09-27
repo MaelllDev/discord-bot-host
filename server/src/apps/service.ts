@@ -776,21 +776,26 @@ export class AppService {
   }
 
   /**
-   * O ícone é carregado direto pelo navegador (`<img src>`), então só http/https
-   * são aceitos — `javascript:` e afins nunca entram na interface.
+   * O ícone é carregado direto pelo navegador (`<img src>`), então só são
+   * aceitos URLs http/https e os caminhos internos das imagens enviadas pelo
+   * próprio painel (`/uploads/images/<id>.png`, mesma origem, servidas com
+   * sessão). `javascript:` e afins nunca entram na interface.
    */
   private validateIconUrl(value: string): string {
     const url = value.trim();
     if (url.length === 0) return "";
-    if (url.length > 500) throw new ValidationError("A URL do ícone deve ter no máximo 500 caracteres.");
+    if (url.length > 500) throw new ValidationError("A URL do ícone deve ter no máximo 500 caracteres.", undefined, "icon.tooLong");
+    // Caminho devolvido pelo upload de imagens do painel: nome gerado pelo
+    // servidor (hex + extensão validada), não é entrada do usuário.
+    if (url.startsWith("/uploads/images/")) return url;
     let parsed: URL;
     try {
       parsed = new URL(url);
     } catch {
-      throw new ValidationError("Informe uma URL válida (http ou https) para o ícone.");
+      throw new ValidationError("Informe uma URL válida (http ou https) para o ícone.", undefined, "icon.invalid");
     }
     if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-      throw new ValidationError("O ícone precisa ser uma URL http ou https.");
+      throw new ValidationError("O ícone precisa ser uma URL http ou https.", undefined, "icon.protocol");
     }
     return url;
   }

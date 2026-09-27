@@ -1,16 +1,210 @@
 @import "tailwindcss";
 
 /*
- * Identidade visual do painel.
+ * Identidade visual do painel — dois temas, um só conjunto de utilidades.
  *
- * As escalas `slate` (superfícies neutras quase pretas), `indigo`/`violet`
- * (destaque roxo-indigo) e os raios são redefinidas aqui de propósito: todas as
- * telas usam esses tokens, então o tema inteiro acompanha de uma vez.
+ * Todas as telas usam as escalas `slate` (superfícies e texto), `indigo`/`violet`
+ * (destaque) e as escalas de estado (`emerald`, `rose`, `amber`, `sky`). Como o
+ * Tailwind v4 emite as utilidades como `var(--color-*)`, basta redefinir esses
+ * tokens por tema para que o painel inteiro acompanhe de uma vez — nenhuma tela
+ * precisa saber qual tema está ativo.
+ *
+ *   :root                      → tema novo (claro, canvas branco + esmeralda)
+ *   :root[data-theme="legacy"] → tema antigo (escuro, roxo puxado para o indigo)
+ *
+ * O par `--color-white` é o truque central do tema claro: ele é usado no código
+ * como "contraste/tinta" (`text-white`, `border-white/10`, `bg-white/[0.04]`).
+ * No tema claro ele vira a tinta escura (#171717) — então as bordas de 10% viram
+ * hairlines cinza e o texto dos botões coloridos fica escuro sobre a cor, que é
+ * exatamente a assinatura do novo sistema de design.
  */
 @theme {
   --font-mono: ui-monospace, "SFMono-Regular", "JetBrains Mono", Menlo, Consolas, monospace;
+  /* O novo sistema de design usa Circular/Inter com fallbacks humanistas. */
+  --font-sans:
+    Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Helvetica, Arial,
+    sans-serif;
 
-  /* Superfícies: fundo quase preto, cartões um degrau acima, bordas outro. */
+  /* Superfícies: página quase branca, cartões brancos, degraus de cinza acima. */
+  --color-slate-50: #171717;
+  --color-slate-100: #1a1a1a;
+  --color-slate-200: #262626;
+  --color-slate-300: #404040;
+  --color-slate-400: #5f5f5f;
+  --color-slate-500: #767676;
+  --color-slate-600: #c7c7c7;
+  --color-slate-700: #e0e0e0;
+  --color-slate-800: #f4f4f4;
+  --color-slate-900: #ffffff;
+  --color-slate-950: #fafafa;
+
+  /* "Branco" = tinta: hairlines (`border-white/10`) e texto de contraste. */
+  --color-white: #171717;
+
+  /* Destaque: esmeralda (o único evento cromático do sistema). */
+  --color-indigo-100: #14835a;
+  --color-indigo-200: #12684a;
+  --color-indigo-300: #0f7a52;
+  --color-indigo-400: #4ade80;
+  --color-indigo-500: #2fbf85;
+  --color-indigo-600: #3ecf8e;
+  --color-indigo-700: #24b47e;
+  --color-indigo-900: #d1fae5;
+  --color-indigo-950: #ecfdf5;
+
+  --color-violet-300: #14835a;
+  --color-violet-400: #24b47e;
+  --color-violet-500: #24b47e;
+  --color-violet-600: #1c9d6c;
+
+  /* Estado online */
+  --color-emerald-200: #0b7a4d;
+  --color-emerald-300: #0d8a56;
+  --color-emerald-400: #0d9668;
+  --color-emerald-500: #34d399;
+  --color-emerald-600: #4ade80;
+  --color-emerald-900: #d1fae5;
+  --color-emerald-950: #ecfdf5;
+
+  /* Estado de falha */
+  --color-rose-100: #9f1239;
+  --color-rose-200: #be123c;
+  --color-rose-300: #be123c;
+  --color-rose-400: #f43f5e;
+  --color-rose-500: #e11d48;
+  --color-rose-900: #fecdd3;
+  --color-rose-950: #fff1f2;
+
+  /* Estado de atenção */
+  --color-amber-100: #92400e;
+  --color-amber-200: #b45309;
+  --color-amber-300: #b45309;
+  --color-amber-400: #f59e0b;
+  --color-amber-500: #f59e0b;
+  --color-amber-800: #fde68a;
+  --color-amber-950: #fffbeb;
+
+  /* Estado neutro/informativo */
+  --color-sky-200: #0369a1;
+  --color-sky-400: #0284c7;
+  --color-sky-500: #0ea5e9;
+
+  /* Rótulo de "arquivos do código": azul no tema novo, indigo no legacy. */
+  --color-code-200: #0369a1;
+  --color-code-900: #bae6fd;
+  --color-code-950: #e0f2fe;
+
+  /* Raios: botões e campos de 6px, cartões de 12px, modais de 16px. */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+}
+
+/*
+ * Tokens próprios do painel (não são da paleta): fundo do corpo, sombras,
+ * realces e o terminal. Ficam em CSS variables para que cada tema os troque
+ * sem tocar em nenhum componente.
+ */
+:root {
+  --bp-accent-rgb: 62 207 142;
+  /* Texto sobre superfícies de destaque (botão esmeralda): tinta quase preta. */
+  --bp-on-accent: #171717;
+  --bp-body-image: none;
+  --bp-body-size: auto;
+  --bp-card-shadow: 0 1px 2px rgb(0 0 0 / 0.04), 0 1px 3px rgb(0 0 0 / 0.06);
+  --bp-hero-border: #e4e4e4;
+  --bp-hero-bg: #ffffff;
+  --bp-hero-image: none;
+  --bp-scrollbar: #c7c7c7;
+  --bp-scrim: rgb(23 23 23 / 0.45);
+  --bp-hairline: #e2e2e2;
+  --bp-heading-tracking: -0.02em;
+}
+
+/* --------------------------------------------------------------------------
+ * Tema escuro — o mesmo sistema de design, em superfícies quase pretas.
+ * ------------------------------------------------------------------------ */
+:root[data-theme="dark"] {
+  --color-slate-50: #fafafa;
+  --color-slate-100: #f0f0f0;
+  --color-slate-200: #e0e0e0;
+  --color-slate-300: #c4c4c4;
+  --color-slate-400: #a0a0a0;
+  --color-slate-500: #8a8a8a;
+  --color-slate-600: #4d4d4d;
+  --color-slate-700: #333333;
+  --color-slate-800: #262626;
+  --color-slate-900: #1c1c1c;
+  --color-slate-950: #171717;
+
+  --color-white: #ffffff;
+
+  --color-indigo-100: #d1fae5;
+  --color-indigo-200: #a7f3d0;
+  --color-indigo-300: #6ee7b7;
+  --color-indigo-400: #4ade80;
+  --color-indigo-500: #3ecf8e;
+  --color-indigo-600: #3ecf8e;
+  --color-indigo-700: #24b47e;
+  --color-indigo-900: #0d3b2a;
+  --color-indigo-950: #072a1d;
+
+  --color-violet-300: #6ee7b7;
+  --color-violet-400: #4ade80;
+  --color-violet-500: #3ecf8e;
+  --color-violet-600: #24b47e;
+
+  --color-emerald-200: #a7f3d0;
+  --color-emerald-300: #6ee7b7;
+  --color-emerald-400: #34d399;
+  --color-emerald-500: #10b981;
+  --color-emerald-600: #34d399;
+  --color-emerald-900: #064e3b;
+  --color-emerald-950: #022c22;
+
+  --color-rose-100: #ffe4e6;
+  --color-rose-200: #fecdd3;
+  --color-rose-300: #fda4af;
+  --color-rose-400: #fb7185;
+  --color-rose-500: #f43f5e;
+  --color-rose-900: #881337;
+  --color-rose-950: #4c0519;
+
+  --color-amber-100: #fef3c7;
+  --color-amber-200: #fde68a;
+  --color-amber-300: #fcd34d;
+  --color-amber-400: #fbbf24;
+  --color-amber-500: #f59e0b;
+  --color-amber-800: #92400e;
+  --color-amber-950: #451a03;
+
+  --color-sky-200: #bae6fd;
+  --color-sky-400: #38bdf8;
+  --color-sky-500: #0ea5e9;
+
+  --color-code-200: #bae6fd;
+  --color-code-900: #0c4a6e;
+  --color-code-950: #082f49;
+
+  --bp-card-shadow: 0 1px 2px rgb(0 0 0 / 0.35), 0 1px 3px rgb(0 0 0 / 0.4);
+  --bp-hero-border: #2e2e2e;
+  --bp-hero-bg: #1c1c1c;
+  --bp-hero-image: none;
+  --bp-scrollbar: #4d4d4d;
+  --bp-scrim: rgb(0 0 0 / 0.7);
+  --bp-hairline: rgb(255 255 255 / 0.08);
+}
+
+/* --------------------------------------------------------------------------
+ * Tema legacy — a identidade anterior (escura, roxo-indigo). Só os tokens
+ * mudam; o markup das telas é exatamente o mesmo.
+ * ------------------------------------------------------------------------ */
+:root[data-theme="legacy"] {
+  --font-sans:
+    ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol",
+    "Noto Color Emoji";
+
   --color-slate-50: #f5f7f9;
   --color-slate-100: #e7ebf0;
   --color-slate-200: #cbd3dc;
@@ -23,7 +217,8 @@
   --color-slate-900: #0e1116;
   --color-slate-950: #070a0d;
 
-  /* Destaque: roxo puxado para o indigo. */
+  --color-white: #ffffff;
+
   --color-indigo-100: #ece8ff;
   --color-indigo-200: #d6ceff;
   --color-indigo-300: #b9abff;
@@ -31,7 +226,6 @@
   --color-indigo-500: #7c5cff;
   --color-indigo-600: #6a45f2;
   --color-indigo-700: #5a37d8;
-  --color-indigo-800: #3b2bb8;
   --color-indigo-900: #2b2088;
   --color-indigo-950: #1b1550;
 
@@ -40,11 +234,66 @@
   --color-violet-500: #9a5cff;
   --color-violet-600: #8433f0;
 
-  /* Raios: botões e campos de 8px, cartões de 12px, blocos de destaque de 18px. */
+  --color-emerald-200: #a7f3d0;
+  --color-emerald-300: #6ee7b7;
+  --color-emerald-400: #34d399;
+  --color-emerald-500: #10b981;
+  --color-emerald-600: #059669;
+  --color-emerald-900: #064e3b;
+  --color-emerald-950: #022c22;
+
+  --color-rose-100: #ffe4e6;
+  --color-rose-200: #fecdd3;
+  --color-rose-300: #fda4af;
+  --color-rose-400: #fb7185;
+  --color-rose-500: #f43f5e;
+  --color-rose-900: #881337;
+  --color-rose-950: #4c0519;
+
+  --color-amber-100: #fef3c7;
+  --color-amber-200: #fde68a;
+  --color-amber-300: #fcd34d;
+  --color-amber-400: #fbbf24;
+  --color-amber-500: #f59e0b;
+  --color-amber-800: #92400e;
+  --color-amber-950: #451a03;
+
+  --color-sky-200: #bae6fd;
+  --color-sky-400: #38bdf8;
+  --color-sky-500: #0ea5e9;
+
+  --color-code-200: #d6ceff;
+  --color-code-900: #2b2088;
+  --color-code-950: #1b1550;
+
   --radius-sm: 4px;
   --radius-md: 8px;
   --radius-lg: 12px;
   --radius-xl: 18px;
+
+  --bp-accent-rgb: 124 92 255;
+  --bp-body-image:
+    linear-gradient(to right, rgb(255 255 255 / 0.024) 1px, transparent 1px),
+    linear-gradient(to bottom, rgb(255 255 255 / 0.024) 1px, transparent 1px),
+    radial-gradient(820px 460px at 8% -16%, rgb(124 92 255 / 0.11), transparent 62%),
+    radial-gradient(720px 420px at 98% -10%, rgb(154 92 255 / 0.08), transparent 64%);
+  --bp-body-size: 32px 32px, 32px 32px, auto, auto;
+  --bp-card-shadow:
+    inset 0 1px 0 0 rgb(255 255 255 / 0.03),
+    0 20px 40px -34px rgb(0 0 0 / 0.95);
+  --bp-hero-border: rgb(156 135 255 / 0.2);
+  --bp-hero-bg: #0e1116;
+  --bp-hero-image: linear-gradient(
+    135deg,
+    color-mix(in oklab, #7c5cff 14%, transparent) 0%,
+    #0e1116 58%,
+    #0e1116 100%
+  );
+  --bp-on-accent: #ffffff;
+  --bp-scrollbar: #4b5563;
+  --bp-scrim: rgb(7 10 13 / 0.8);
+  --bp-hairline: rgb(255 255 255 / 0.06);
+  --bp-heading-tracking: -0.011em;
 }
 
 @layer base {
@@ -56,25 +305,17 @@
 
   body {
     @apply bg-slate-950 text-slate-200 antialiased;
-    /* Grade discreta + dois brilhos de destaque: profundidade sem competir
-       com o conteúdo (os cartões são opacos e cobrem a grade). */
-    background-image:
-      linear-gradient(to right, rgb(255 255 255 / 0.024) 1px, transparent 1px),
-      linear-gradient(to bottom, rgb(255 255 255 / 0.024) 1px, transparent 1px),
-      radial-gradient(820px 460px at 8% -16%, rgb(124 92 255 / 0.11), transparent 62%),
-      radial-gradient(720px 420px at 98% -10%, rgb(154 92 255 / 0.08), transparent 64%);
-    background-size:
-      32px 32px,
-      32px 32px,
-      auto,
-      auto;
+    /* No tema novo o canvas é limpo (sem gradientes); no legacy continuam a
+       grade discreta e os dois brilhos de destaque. */
+    background-image: var(--bp-body-image);
+    background-size: var(--bp-body-size);
     background-attachment: fixed;
   }
 
   h1,
   h2,
   h3 {
-    letter-spacing: -0.011em;
+    letter-spacing: var(--bp-heading-tracking);
   }
 
   ::selection {
@@ -83,7 +324,7 @@
 
   * {
     scrollbar-width: thin;
-    scrollbar-color: rgb(75 85 99) transparent;
+    scrollbar-color: var(--bp-scrollbar) transparent;
   }
 
   ::-webkit-scrollbar {
@@ -92,11 +333,11 @@
   }
 
   ::-webkit-scrollbar-thumb {
-    @apply rounded-full bg-slate-700;
+    @apply rounded-full bg-slate-600;
   }
 
   ::-webkit-scrollbar-thumb:hover {
-    @apply bg-slate-600;
+    @apply bg-slate-500;
   }
 
   ::-webkit-scrollbar-track {
@@ -115,9 +356,7 @@
   /* Superfície padrão de conteúdo. */
   .card {
     @apply rounded-lg border border-white/10 bg-slate-900;
-    box-shadow:
-      inset 0 1px 0 0 rgb(255 255 255 / 0.03),
-      0 20px 40px -34px rgb(0 0 0 / 0.95);
+    box-shadow: var(--bp-card-shadow);
   }
 
   /* Cartões clicáveis: realce discreto no hover, como nos tiles de recurso. */
@@ -128,13 +367,10 @@
 
   /* Bloco de destaque (onboarding / boas-vindas). */
   .hero-card {
-    @apply relative overflow-hidden rounded-xl border border-indigo-400/20;
-    background-image: linear-gradient(
-      135deg,
-      color-mix(in oklab, var(--color-indigo-500) 14%, transparent) 0%,
-      var(--color-slate-900) 58%,
-      var(--color-slate-900) 100%
-    );
+    @apply relative overflow-hidden rounded-xl border;
+    border-color: var(--bp-hero-border);
+    background-color: var(--bp-hero-bg);
+    background-image: var(--bp-hero-image);
   }
 
   /* Bloco quadrado de ícone usado em KPIs, cabeçalhos de cartão e ações. */
@@ -175,6 +411,84 @@
   .pop-in {
     animation: pop-in 0.18s cubic-bezier(0.22, 1, 0.36, 1) both;
   }
+
+  /* Realces que antes eram rgb fixo do roxo — agora seguem o destaque do tema. */
+  .accent-btn-glow {
+    box-shadow: 0 10px 26px -14px rgb(var(--bp-accent-rgb) / 0.95);
+  }
+
+  .accent-nav-glow {
+    box-shadow: inset 0 0 0 1px rgb(var(--bp-accent-rgb) / 0.22);
+  }
+
+  .accent-step-glow {
+    box-shadow: inset 0 0 0 1px rgb(var(--bp-accent-rgb) / 0.3);
+  }
+
+  .accent-ring-glow {
+    box-shadow: 0 0 30px -14px rgb(var(--bp-accent-rgb) / 0.8);
+  }
+
+  .accent-brand-glow {
+    box-shadow: 0 0 34px -16px rgb(var(--bp-accent-rgb) / 0.9);
+  }
+
+  /* Texto sobre superfície de destaque — tinta no claro, branco no legacy. */
+  .on-accent {
+    color: var(--bp-on-accent);
+  }
+
+  /* Contorno de item/aba ativo: visível nos dois temas (era branco 6%). */
+  .tab-active-ring {
+    box-shadow: inset 0 0 0 1px var(--bp-hairline);
+  }
+
+  /* Dropzone sob o arraste: contorno e fundo com o destaque do tema ativo. */
+  .dropzone-active {
+    border-color: rgb(var(--bp-accent-rgb) / 0.55);
+    background: rgb(var(--bp-accent-rgb) / 0.08);
+  }
+
+  /* Brilho decorativo do bloco de destaque. */
+  .hero-glow {
+    @apply pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-indigo-500/20 blur-3xl;
+  }
+}
+
+/* O tema novo (claro ou escuro) não usa brilhos atmosféricos. */
+:root[data-theme="light"] .hero-glow {
+  display: none;
+}
+:root[data-theme="dark"] .hero-glow {
+  display: none;
+}
+
+/*
+ * Console/terminal: no tema claro o log continua escuro — é o "code block" do
+ * sistema de design. Redefinir os tokens aqui dentro devolve contraste claro ao
+ * texto sem tocar em nenhum componente.
+ */
+:root[data-theme="light"] .terminal {
+  --color-white: #ffffff;
+  --color-slate-50: #fafafa;
+  --color-slate-100: #f4f4f5;
+  --color-slate-200: #e4e4e7;
+  --color-slate-300: #d4d4d8;
+  --color-slate-400: #a1a1aa;
+  --color-slate-500: #8b8b93;
+  --color-slate-600: #52525b;
+  --color-slate-700: #3f3f46;
+  --color-slate-800: #27272a;
+  --color-slate-900: #1c1c1c;
+  --color-slate-950: #1c1c1c;
+  --color-indigo-100: #d1fae5;
+  --color-indigo-200: #a7f3d0;
+  --color-indigo-300: #86efac;
+  --color-rose-300: #fda4af;
+  --color-emerald-400: #34d399;
+  --color-amber-300: #fcd34d;
+  background-color: #1c1c1c;
+  color: #d4d4d8;
 }
 
 @keyframes fade-in {

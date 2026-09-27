@@ -84,5 +84,5 @@ export function useTranslate(): Translate {
   return useI18n().t;
 }
 
-export { LANGUAGES, LANGUAGE_NAMES, LANGUAGE_SHORT, detectLanguage, isLanguage } from "./language.ts";
+export { LANGUAGES, LANGUAGE_NAMES, detectLanguage, isLanguage } from "./language.ts";
 export type { Language } from "./language.ts";

@@ -157,7 +157,7 @@ export default function AppDetail() {
             <AppIcon
               app={app}
               size="lg"
-              className="ring-1 ring-indigo-400/20 shadow-[0_0_30px_-14px_rgb(124_92_255/0.8)]"
+              className="accent-ring-glow ring-1 ring-indigo-400/20"
             />
             <div className="min-w-0 space-y-2">
               <div className="flex flex-wrap items-center gap-2">

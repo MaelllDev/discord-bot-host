@@ -288,7 +288,7 @@ export default function NewApp() {
                 disabled={index > step || creating}
                 className={cn(
                   "flex items-center gap-2 rounded-md px-2.5 py-1.5 text-xs font-medium transition-colors",
-                  current && "bg-indigo-500/15 text-indigo-100 shadow-[inset_0_0_0_1px_rgb(124_92_255/0.3)]",
+                  current && "accent-step-glow bg-indigo-500/15 text-indigo-100",
                   done && "text-slate-300 hover:bg-white/[0.06]",
                   !done && !current && "text-slate-500",
                 )}
@@ -299,7 +299,7 @@ export default function NewApp() {
                     done
                       ? "bg-emerald-500/15 text-emerald-300"
                       : current
-                        ? "bg-indigo-500 text-white"
+                        ? "on-accent bg-indigo-500"
                         : "bg-white/[0.06] text-slate-400",
                   )}
                 >

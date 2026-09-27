@@ -10,6 +10,10 @@ before being published, so there is no earlier version history to import.
 
 ## [Unreleased]
 
+## [1.0.4] - 2026-09-27
+
+Theme system with three options: light (new default, following the design language), dark, and the previous violet look as legacy — selectable from the navbar, login and settings. Language switcher rebuilt as a globe button with a menu. Applications page now toggles between cards and list with a persisted preference. Unsaved-changes bar on the application settings page with navigation blocking. Drag & drop ZIP upload in the update-code dialog, rejecting non-zip files with a clear message. New panel icons (favicon and logos) now ship with releases. Fixes: icon URL validator accepts internal upload paths, and the status watcher no longer throws unhandled rejections when the database closes on shutdown.
+
 ## [1.0.3] - 2026-09-25
 
 New features: custom panel branding (name and icon), image uploads for application icons, Discord webhook notifications for application lifecycle events with per-webhook customization, and bilingual interface (pt-BR/English). Improvements: richer validation messages with translated error codes, Docker image existence check before deployment, cleaner application detail page, fixed sidebar with collapse button, and a dedicated backups page.
@@ -98,7 +102,8 @@ First public release.
 - Test suite: backend unit/integration tests, frontend render tests (jsdom) and a Docker
   end-to-end suite covering the full container lifecycle.
 
-[Unreleased]: https://github.com/MaelllDev/discord-bot-host/compare/v1.0.3...HEAD
+[Unreleased]: https://github.com/MaelllDev/discord-bot-host/compare/v1.0.4...HEAD
+[1.0.4]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.0.4
 [1.0.3]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.0.3
 [1.0.2]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.0.2
 [1.0.1]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.0.1

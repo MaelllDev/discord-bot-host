@@ -20,7 +20,7 @@ type ButtonSize = "sm" | "md" | "lg";
 
 const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
   primary:
-    "bg-indigo-600 text-white shadow-[0_10px_26px_-14px_rgb(124_92_255/0.95)] hover:bg-indigo-500 focus-visible:ring-indigo-400/60",
+    "accent-btn-glow on-accent bg-indigo-600 hover:bg-indigo-500 focus-visible:ring-indigo-400/60",
   secondary:
     "border border-white/10 bg-white/[0.04] text-slate-100 hover:border-white/20 hover:bg-white/[0.08] focus-visible:ring-white/30",
   outline:
@@ -29,7 +29,7 @@ const BUTTON_VARIANTS: Record<ButtonVariant, string> = {
     "border border-rose-500/30 bg-rose-500/10 text-rose-200 hover:border-rose-500/40 hover:bg-rose-500/20 hover:text-rose-100 focus-visible:ring-rose-400/50",
   ghost: "text-slate-300 hover:bg-white/[0.06] hover:text-white focus-visible:ring-white/30",
   success:
-    "bg-emerald-600 text-white shadow-[0_10px_26px_-14px_rgb(16_185_129/0.9)] hover:bg-emerald-500 focus-visible:ring-emerald-400/60",
+    "on-accent bg-emerald-600 shadow-[0_10px_26px_-14px_rgb(16_185_129/0.9)] hover:bg-emerald-500 focus-visible:ring-emerald-400/60",
 };
 
 const BUTTON_SIZES: Record<ButtonSize, string> = {
@@ -450,7 +450,7 @@ export function Modal({
   if (!open) return null;
   return (
     <div
-      className="fade-in fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-slate-950/80 p-4 backdrop-blur-md sm:p-8"
+      className="fade-in fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-[var(--bp-scrim)] p-4 backdrop-blur-md sm:p-8"
       role="dialog"
       aria-modal="true"
     >
@@ -492,7 +492,7 @@ export function Tabs<T extends string>({
           className={cn(
             "rounded-sm px-3 py-1.5 text-xs font-medium transition-colors duration-200 outline-none focus-visible:ring-2 focus-visible:ring-indigo-400/50",
             value === tab.id
-              ? "bg-slate-800 text-white shadow-[0_0_0_1px_rgb(255_255_255/0.06)]"
+              ? "tab-active-ring bg-slate-800 text-white"
               : "text-slate-400 hover:text-slate-200",
           )}
         >
@@ -584,7 +584,7 @@ export function Hero({
     <section className="hero-card p-6 sm:p-8">
       <div
         aria-hidden="true"
-        className="pointer-events-none absolute -right-20 -top-24 h-64 w-64 rounded-full bg-indigo-500/20 blur-3xl"
+        className="hero-glow"
       />
       <div className="relative flex flex-col gap-7">
         <div className="flex max-w-2xl flex-col gap-3">

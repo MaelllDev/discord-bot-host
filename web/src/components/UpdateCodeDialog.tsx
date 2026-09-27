@@ -3,7 +3,7 @@ import { api, uploadZipWithProgress } from "../api.ts";
 import type { AppSummary, ProjectDetection } from "../types.ts";
 import { errorText } from "../hooks.ts";
 import { humanBytes, runtimeLabel } from "../format.ts";
-import { Alert, Badge, Button, Input, Modal, ProgressBar, Spinner } from "./ui.tsx";
+import { Alert, Badge, Button, cn, Input, Modal, ProgressBar, Spinner } from "./ui.tsx";
 import { IconCheck, IconUpload } from "./icons.tsx";
 import DeploymentLogView from "./DeploymentLogView.tsx";
 import { useToast } from "./Toasts.tsx";
@@ -35,6 +35,9 @@ export default function UpdateCodeDialog({
   const [deploymentId, setDeploymentId] = useState<number | null>(null);
   const [releaseSeq, setReleaseSeq] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  const [rejectFile, setRejectFile] = useState<string | null>(null);
+  const dragDepth = useRef(0);
 
   const reset = (): void => {
     setStage("select");
@@ -47,6 +50,9 @@ export default function UpdateCodeDialog({
     setDeploymentId(null);
     setReleaseSeq(null);
     setError(null);
+    setRejectFile(null);
+    dragDepth.current = 0;
+    setDragging(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
   };
 
@@ -54,6 +60,26 @@ export default function UpdateCodeDialog({
     if (stage === "uploading" || stage === "deploying") return;
     reset();
     onClose();
+  };
+
+  // Soltar arquivos só tem efeito antes do upload começar (e permite reenviar
+  // em "ready"); durante upload/deploy é ignorado para não interromper nada.
+  const dropLocked = stage === "uploading" || stage === "deploying" || stage === "done";
+
+  // Aceita o ZIP vindo do input ou do drag & drop; qualquer outro arquivo é
+  // recusado com aviso, sem iniciar upload.
+  const acceptFile = (file: File | null | undefined): void => {
+    if (!file || dropLocked) return;
+    const isZip =
+      file.name.toLowerCase().endsWith(".zip") ||
+      file.type === "application/zip" ||
+      file.type === "application/x-zip-compressed";
+    if (!isZip) {
+      setRejectFile(file.name);
+      return;
+    }
+    setRejectFile(null);
+    void pick(file);
   };
 
   const pick = async (file: File): Promise<void> => {
@@ -113,7 +139,18 @@ export default function UpdateCodeDialog({
         </>
       }
     >
-      <div className="space-y-4 text-xs text-slate-300">
+      <div
+        className="space-y-4 text-xs text-slate-300"
+        onDragOver={(event) => {
+          if (dropLocked) return;
+          event.preventDefault();
+        }}
+        onDrop={(event) => {
+          if (dropLocked) return;
+          event.preventDefault();
+          acceptFile(event.dataTransfer.files[0]);
+        }}
+      >
         <div className="flex flex-wrap items-center gap-2">
           <Badge tone="indigo">
             {t("update.current", {
@@ -141,11 +178,50 @@ export default function UpdateCodeDialog({
           }}
         />
 
+        {rejectFile ? (
+          <Alert tone="amber">{t("update.drop.reject", { name: rejectFile })}</Alert>
+        ) : null}
+
         {stage === "select" ? (
-          <div className="rounded-lg border-2 border-dashed border-white/8 px-6 py-8 text-center">
-            <IconUpload className="mx-auto h-6 w-6 text-slate-500" />
+          <div
+            data-testid="update-dropzone"
+            role="button"
+            tabIndex={0}
+            aria-label={t("update.drop.title")}
+            onClick={() => fileInputRef.current?.click()}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" || event.key === " ") {
+                event.preventDefault();
+                fileInputRef.current?.click();
+              }
+            }}
+            onDragEnter={(event) => {
+              event.preventDefault();
+              dragDepth.current += 1;
+              setDragging(true);
+            }}
+            onDragOver={(event) => {
+              event.preventDefault();
+              if (event.dataTransfer) event.dataTransfer.dropEffect = "copy";
+            }}
+            onDragLeave={() => {
+              dragDepth.current = Math.max(0, dragDepth.current - 1);
+              if (dragDepth.current === 0) setDragging(false);
+            }}
+            className={cn(
+              "cursor-pointer rounded-lg border-2 border-dashed px-6 py-8 text-center outline-none transition-colors duration-200",
+              dragging ? "dropzone-active" : "border-white/12 hover:border-white/25",
+            )}
+          >
+            <IconUpload
+              className={cn(
+                "mx-auto h-6 w-6 transition-colors",
+                dragging ? "text-[rgb(var(--bp-accent-rgb))]" : "text-slate-500",
+              )}
+            />
             <p className="mt-2 text-sm text-slate-300">{t("update.drop.title")}</p>
-            <p className="mt-1 text-[11px] text-slate-500">{t("update.drop.note")}</p>
+            <p className="mt-1 text-[11px] text-slate-500">{t("update.drop.hint")}</p>
+            <p className="mt-3 text-[11px] leading-relaxed text-slate-500">{t("update.drop.note")}</p>
           </div>
         ) : null}
 

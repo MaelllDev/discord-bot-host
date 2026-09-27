@@ -7,6 +7,7 @@ import { CreatorCredit } from "../components/Credits.tsx";
 import { useI18n } from "../i18n/index.tsx";
 import { useBranding } from "../branding.tsx";
 import LanguageSwitch from "../components/LanguageSwitch.tsx";
+import ThemeSwitch from "../components/ThemeSwitch.tsx";
 
 export default function Login({ onSuccess, expired = false }: { onSuccess: () => void; expired?: boolean }) {
   const { t } = useI18n();
@@ -45,14 +46,15 @@ export default function Login({ onSuccess, expired = false }: { onSuccess: () =>
             alt=""
             width={56}
             height={56}
-            className="mx-auto h-14 w-14 rounded-xl border border-indigo-400/20 bg-slate-900 object-contain p-1 shadow-[0_0_34px_-16px_rgb(124_92_255/0.9)]"
+            className="accent-brand-glow mx-auto h-14 w-14 rounded-xl border border-indigo-400/20 bg-slate-900 object-contain p-1"
           />
           <h1 className="mt-4 text-2xl font-semibold tracking-tight text-slate-50">{branding.name}</h1>
           <p className="mt-1 text-xs text-slate-500">{t("login.subtitle")}</p>
         </div>
 
-        <div className="mb-4 flex justify-center">
-          <LanguageSwitch />
+        <div className="mb-4 flex flex-wrap items-center justify-center gap-2">
+          <ThemeSwitch compact />
+          <LanguageSwitch compact />
         </div>
 
         {expired ? (

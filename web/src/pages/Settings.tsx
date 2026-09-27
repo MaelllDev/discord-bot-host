@@ -20,6 +20,7 @@ import AiSettingsCard from "../components/AiSettingsCard.tsx";
 import WebhooksCard from "../components/WebhooksCard.tsx";
 import ImageUpload from "../components/ImageUpload.tsx";
 import LanguageSwitch from "../components/LanguageSwitch.tsx";
+import ThemeSwitch from "../components/ThemeSwitch.tsx";
 import { useI18n } from "../i18n/index.tsx";
 import { useBranding } from "../branding.tsx";
 
@@ -207,7 +208,23 @@ export default function Settings({ onLogout }: { onLogout?: () => void }) {
 
       <WebhooksCard />
 
-      <Card title={t("settings.language.title")} subtitle={t("settings.language.hint")}>
+      <Card title={t("settings.theme.title")} subtitle={t("settings.theme.hint")}>
+        <div className="space-y-3">
+          <ThemeSwitch />
+          <p className="text-[11px] leading-relaxed text-slate-500">
+            <strong className="text-slate-300">{t("theme.light")}</strong> {t("theme.light.hint")}{" "}
+            <strong className="text-slate-300">{t("theme.dark")}</strong> {t("theme.dark.hint")}{" "}
+            <strong className="text-slate-300">{t("theme.legacy")}</strong> {t("theme.legacy.hint")}
+          </p>
+        </div>
+      </Card>
+
+      {/* `!overflow-visible`: a lista do seletor de idioma abre para fora do card. */}
+      <Card
+        title={t("settings.language.title")}
+        subtitle={t("settings.language.hint")}
+        className="!overflow-visible"
+      >
         <LanguageSwitch />
       </Card>
 

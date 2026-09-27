@@ -7,7 +7,7 @@ import { IconCheck, IconClose } from "./icons.tsx";
 function Marker({ state, failed }: { state: "done" | "active" | "pending"; failed: boolean }) {
   if (state === "done") {
     return (
-      <span className="flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600/80 text-white">
+      <span className="on-accent flex h-4 w-4 items-center justify-center rounded-full bg-emerald-600/80">
         <IconCheck className="h-3 w-3" />
       </span>
     );

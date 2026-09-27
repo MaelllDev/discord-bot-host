@@ -4,6 +4,8 @@ import { api } from "./api.ts";
 
 const DEFAULT_NAME = "BotPanel";
 const FALLBACK_ICON = "/logo.png";
+/** Ícone da aba quando o painel usa o logo padrão: o .ico tem vários tamanhos. */
+const FALLBACK_FAVICON = "/favicon.ico";
 
 interface Branding {
   name: string;
@@ -20,7 +22,7 @@ interface BrandingApi extends Branding {
 const BrandingContext = createContext<BrandingApi | null>(null);
 
 function applyFavicon(iconUrl: string): void {
-  const href = iconUrl || FALLBACK_ICON;
+  const href = !iconUrl || iconUrl === FALLBACK_ICON ? FALLBACK_FAVICON : iconUrl;
   let link = document.querySelector<HTMLLinkElement>('link[rel="icon"]');
   if (!link) {
     link = document.createElement("link");

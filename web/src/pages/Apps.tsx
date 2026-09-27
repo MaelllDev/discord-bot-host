@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../api.ts";
 import { useAsync, errorText } from "../hooks.ts";
@@ -17,13 +17,35 @@ import {
   Select,
   SkeletonRows,
   StatusBadge,
+  Tabs,
   cn,
 } from "../components/ui.tsx";
 import AppIcon from "../components/AppIcon.tsx";
 import { useI18n } from "../i18n/index.tsx";
-import { IconApps, IconPlay, IconPlus, IconRestart, IconSearch, IconStop } from "../components/icons.tsx";
+import {
+  IconApps,
+  IconGrid,
+  IconList,
+  IconPlay,
+  IconPlus,
+  IconRestart,
+  IconSearch,
+  IconStop,
+} from "../components/icons.tsx";
 
 type Filter = "all" | "online" | "stopped" | "unknown";
+
+/** Lista ou grade de cards — preferência local do navegador. */
+type View = "cards" | "list";
+const VIEW_KEY = "botpanel.apps.view";
+
+function initialView(): View {
+  try {
+    return localStorage.getItem(VIEW_KEY) === "list" ? "list" : "cards";
+  } catch {
+    return "cards";
+  }
+}
 
 function matches(app: AppSummary, filter: Filter): boolean {
   if (filter === "all") return true;
@@ -85,6 +107,15 @@ export default function Apps() {
   const appsState = useAsync(() => api.apps(), [], { pollMs: 5000 });
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
+  const [view, setView] = useState<View>(initialView);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(VIEW_KEY, view);
+    } catch {
+      // armazenamento indisponível (modo privado): a preferência só não persiste
+    }
+  }, [view]);
 
   const apps = appsState.data?.apps ?? [];
   const visible = useMemo(() => {
@@ -138,6 +169,29 @@ export default function Apps() {
           <option value="stopped">{t("dashboard.kpi.stopped")}</option>
           <option value="unknown">{t("dashboard.kpi.unknown")}</option>
         </Select>
+        {/* Alterna entre a lista e a grade de cards; a escolha fica salva. */}
+        <Tabs<View>
+          value={view}
+          onChange={setView}
+          tabs={[
+            {
+              id: "cards",
+              label: (
+                <span className="inline-flex items-center gap-1.5">
+                  <IconGrid className="h-3.5 w-3.5" /> {t("apps.view.cards")}
+                </span>
+              ),
+            },
+            {
+              id: "list",
+              label: (
+                <span className="inline-flex items-center gap-1.5">
+                  <IconList className="h-3.5 w-3.5" /> {t("apps.view.list")}
+                </span>
+              ),
+            },
+          ]}
+        />
       </div>
 
       {loading ? (
@@ -164,8 +218,17 @@ export default function Apps() {
         <EmptyState title={t("apps.noResults.title")} description={t("apps.noResults.description")} />
       ) : null}
 
-      {/* Tabela (desktop) */}
-      {visible.length > 0 ? (
+      {/* Grade de cards: a visualização escolhida na barra acima. */}
+      {view === "cards" && visible.length > 0 ? (
+        <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+          {visible.map((app) => (
+            <AppCard key={app.id} app={app} onChanged={() => void appsState.reload()} />
+          ))}
+        </div>
+      ) : null}
+
+      {/* Tabela (desktop) da visualização em lista */}
+      {view === "list" && visible.length > 0 ? (
         <Card bodyClassName="p-0" className="hidden lg:block">
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs">
@@ -230,8 +293,8 @@ export default function Apps() {
         </Card>
       ) : null}
 
-      {/* Cards (mobile) */}
-      {visible.length > 0 ? (
+      {/* Lista no celular: a tabela não caberia, então caem os cards. */}
+      {view === "list" && visible.length > 0 ? (
         <div className={cn("grid gap-4 md:grid-cols-2 lg:hidden")}>
           {visible.map((app) => (
             <AppCard key={app.id} app={app} onChanged={() => void appsState.reload()} />

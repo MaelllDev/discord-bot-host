@@ -319,6 +319,26 @@ describe("aplicações", () => {
       payload: fake.payload,
     });
     expect(rejected.statusCode).toBe(400);
+
+    // O caminho devolvido pelo upload é um ícone válido para a aplicação —
+    // regressão: era recusado por exigir http/https absoluto.
+    const created = await server.inject({
+      method: "POST",
+      url: "/api/apps",
+      headers: auth(),
+      payload: { name: "Bot Ícone", runtime: "node", image: "node:22-slim", entry: "index.js", memoryMb: 256, cpu: 0.5, iconUrl: url },
+    });
+    expect(created.statusCode).toBe(201);
+    expect(created.json().app.iconUrl).toBe(url);
+
+    // javascript: continua proibido.
+    const evil = await server.inject({
+      method: "POST",
+      url: "/api/apps",
+      headers: auth(),
+      payload: { name: "Bot Mal", runtime: "node", image: "node:22-slim", entry: "index.js", memoryMb: 256, cpu: 0.5, iconUrl: "javascript:alert(1)" },
+    });
+    expect(evil.statusCode).toBe(400);
   });
 
   it("webhooks: valida URL, persiste e devolve mascarada", async () => {

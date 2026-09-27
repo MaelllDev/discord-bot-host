@@ -106,7 +106,9 @@ export default function FilesPanel({ slug, app }: { slug: string; app: AppSummar
       <div
         className={cn(
           "flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 text-[11px]",
-          editingCode ? "border-indigo-900/60 bg-indigo-950/30 text-indigo-200" : "border-emerald-900/60 bg-emerald-950/25 text-emerald-200",
+          editingCode
+            ? "border-code-900/60 bg-code-950/30 text-code-200"
+            : "border-emerald-900/60 bg-emerald-950/25 text-emerald-200",
         )}
       >
         <div className="flex gap-1 rounded-lg border border-white/8 bg-slate-950/60 p-1">

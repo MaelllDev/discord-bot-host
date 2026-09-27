@@ -15,12 +15,6 @@ export const LANGUAGE_NAMES: Record<Language, string> = {
   en: "English",
 };
 
-/** Etiquetas curtas, para o seletor compacto da barra superior. */
-export const LANGUAGE_SHORT: Record<Language, string> = {
-  "pt-BR": "PT",
-  en: "EN",
-};
-
 /** Locale usada por `toLocaleString` para datas e números. */
 export const LANGUAGE_LOCALES: Record<Language, string> = {
   "pt-BR": "pt-BR",

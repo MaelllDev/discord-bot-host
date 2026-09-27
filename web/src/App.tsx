@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes, useParams } from "react-router-dom";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Navigate, RouterProvider, createBrowserRouter, useLocation } from "react-router-dom";
 import { api, onUnauthorized } from "./api.ts";
 import Layout from "./components/Layout.tsx";
 import { ToastProvider } from "./components/Toasts.tsx";
 import { Spinner } from "./components/ui.tsx";
+import { UnsavedBarProvider } from "./components/UnsavedBar.tsx";
 import Login from "./pages/Login.tsx";
 import Dashboard from "./pages/Dashboard.tsx";
 import Apps from "./pages/Apps.tsx";
@@ -22,7 +23,8 @@ type SessionState = "loading" | "authenticated" | "anonymous";
  * tela do novo bot. A chave força uma montagem limpa por slug.
  */
 function AppDetailRoute() {
-  const { slug } = useParams();
+  const location = useLocation();
+  const slug = location.pathname.startsWith("/apps/") ? location.pathname.slice("/apps/".length) : "";
   return <AppDetail key={slug} />;
 }
 
@@ -57,6 +59,30 @@ export default function App() {
     setState("anonymous");
   }, []);
 
+  // Rotas do painel. Data router (`createBrowserRouter`) é requisito do
+  // `useBlocker` — a confirmação "alterações não salvas" ao trocar de página.
+  // Criado uma única vez: os handlers só usam setters estáveis do React.
+  const router = useMemo(
+    () =>
+      createBrowserRouter([
+        {
+          element: <Layout onLogout={() => void handleLogout()} />,
+          children: [
+            { index: true, element: <Dashboard /> },
+            { path: "apps", element: <Apps /> },
+            { path: "apps/new", element: <NewApp /> },
+            { path: "backups", element: <Backups /> },
+            { path: "apps/:slug", element: <AppDetailRoute /> },
+            { path: "system", element: <SystemPage /> },
+            { path: "settings", element: <Settings onLogout={() => void handleLogout()} /> },
+            { path: "*", element: <Navigate to="/" replace /> },
+          ],
+        },
+      ]),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
+  );
+
   if (state === "loading") {
     return (
       <div className="flex h-full items-center justify-center text-slate-400">
@@ -71,20 +97,9 @@ export default function App() {
 
   return (
     <ToastProvider>
-      <BrowserRouter>
-        <Routes>
-          <Route element={<Layout onLogout={() => void handleLogout()} />}>
-            <Route index element={<Dashboard />} />
-            <Route path="apps" element={<Apps />} />
-            <Route path="apps/new" element={<NewApp />} />
-            <Route path="backups" element={<Backups />} />
-            <Route path="apps/:slug" element={<AppDetailRoute />} />
-            <Route path="system" element={<SystemPage />} />
-            <Route path="settings" element={<Settings onLogout={() => void handleLogout()} />} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Route>
-        </Routes>
-      </BrowserRouter>
+      <UnsavedBarProvider>
+        <RouterProvider router={router} />
+      </UnsavedBarProvider>
     </ToastProvider>
   );
 }

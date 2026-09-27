@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { api } from "../../api.ts";
 import { errorTextRich } from "../../hooks.ts";
 import {
@@ -22,6 +22,7 @@ import AppIcon from "../AppIcon.tsx";
 import { Alert, Badge, Button, Card, Field, InlineCode, Input, Select, Toggle } from "../ui.tsx";
 import { IconTrash } from "../icons.tsx";
 import { useToast } from "../Toasts.tsx";
+import { useUnsavedBar } from "../UnsavedBar.tsx";
 
 const RUNTIME_IMAGES: Record<RuntimeKind, string> = {
   node: "node:22-slim",
@@ -66,6 +67,7 @@ export default function ConfigPanel({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const unsaved = useUnsavedBar();
 
   const portList = ports
     .split(/[\s,]+/)
@@ -150,6 +152,51 @@ export default function ConfigPanel({
       setSaving(false);
     }
   };
+
+  /**
+   * A barra global de alterações não salvas espelha o estado deste painel:
+   * `dirty` acende a barra (e o aviso ao sair), o `save` registrado permite que
+   * o botão da barra — e o diálogo de navegação — salvem daqui.
+   */
+  useEffect(() => {
+    unsaved.setDirty(dirty);
+    return () => unsaved.setDirty(null);
+  }, [unsaved, dirty]);
+
+  useEffect(() => {
+    if (!dirty) {
+      unsaved.setRequestSave(null);
+      return;
+    }
+    unsaved.setRequestSave(() => save());
+    return () => unsaved.setRequestSave(null);
+  }, [unsaved, dirty, save]);
+
+  // Descartar pela barra: restaura o formulário para os valores salvos.
+  useEffect(() => {
+    const discard = (): void => {
+      setName(app.name);
+      setDescription(app.description);
+      setIconUrl(app.iconUrl);
+      setRuntime(app.runtime);
+      setImage(app.image);
+      setEntry(app.entry);
+      setDepsFile(app.depsFile);
+      setInstallCommand(app.installCommand);
+      setStartCommand(app.startCommand);
+      setMemoryMb(app.memoryMb);
+      setCpu(app.cpu);
+      setPidsLimit(app.pidsLimit);
+      setPorts(app.ports.join(" "));
+      setAutoStart(app.autoStart);
+      setAutoRestart(app.autoRestart);
+      setEnv(app.env);
+      setError(null);
+      setSaved(false);
+    };
+    window.addEventListener("botpanel:discard-changes", discard);
+    return () => window.removeEventListener("botpanel:discard-changes", discard);
+  }, [app]);
 
   return (
     <div className="space-y-5">

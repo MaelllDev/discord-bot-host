@@ -168,16 +168,44 @@ describe("troca de idioma na interface", () => {
     expect(container.querySelector("[data-testid='label']")?.textContent).toBe("Aplicações");
     expect(document.documentElement.lang).toBe("pt-BR");
 
-    const enButton = [...container.querySelectorAll("button")].find((button) => button.textContent === "EN");
-    expect(enButton).toBeTruthy();
+    // A lista só existe depois de clicar no globo.
+    expect(container.querySelector("[role='menu']")).toBeNull();
+    const globe = container.querySelector("button[aria-haspopup='menu']");
+    expect(globe).toBeTruthy();
 
     await act(async () => {
-      enButton?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      globe?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
 
-    // Sem reload: o mesmo nó passou a mostrar o texto em inglês.
+    const english = [...container.querySelectorAll("[role='menuitemradio']")].find((item) =>
+      item.textContent?.includes("English"),
+    );
+    expect(english).toBeTruthy();
+
+    await act(async () => {
+      english?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+
+    // Sem reload: o mesmo nó passou a mostrar o texto em inglês, e a lista fechou.
     expect(container.querySelector("[data-testid='label']")?.textContent).toBe("Applications");
+    expect(container.querySelector("[role='menu']")).toBeNull();
     expect(localStorage.getItem(LANGUAGE_STORAGE_KEY)).toBe("en");
     expect(document.documentElement.lang).toBe("en");
+  });
+
+  it("fecha a lista de idiomas ao clicar fora", async () => {
+    localStorage.setItem(LANGUAGE_STORAGE_KEY, "pt-BR");
+    const container = await renderHarness();
+
+    const globe = container.querySelector("button[aria-haspopup='menu']");
+    await act(async () => {
+      globe?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    expect(container.querySelector("[role='menu']")).not.toBeNull();
+
+    await act(async () => {
+      document.body.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    });
+    expect(container.querySelector("[role='menu']")).toBeNull();
   });
 });

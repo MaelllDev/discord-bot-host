@@ -3,13 +3,33 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="color-scheme" content="dark" />
-    <meta name="theme-color" content="#06080b" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#fafafa" />
+    <!--
+      Tema inicial aplicado antes de qualquer pintura: lê a preferência local e
+      marca o `<html>` com `data-theme`, senão o painel piscaria no tema errado
+      enquanto o React monta.
+    -->
+    <script>
+      (function () {
+        var theme = "light";
+        try {
+          var saved = localStorage.getItem("botpanel-theme");
+          // "default" era o nome antigo do tema claro: continua valendo.
+          if (saved === "default") saved = "light";
+          if (saved === "light" || saved === "dark" || saved === "legacy") theme = saved;
+        } catch (error) {
+          /* armazenamento indisponível: fica no tema padrão */
+        }
+        document.documentElement.dataset.theme = theme;
+        document.documentElement.style.colorScheme = theme === "light" ? "light" : "dark";
+      })();
+    </script>
     <meta
       name="description"
       content="BotPanel — painel privado para hospedar e administrar bots e aplicações em uma VPS com Docker."
     />
-    <link rel="icon" type="image/png" href="/logo.png" />
+    <link rel="icon" href="/favicon.ico" sizes="any" />
     <link rel="apple-touch-icon" href="/logo.png" />
     <title>BotPanel</title>
   </head>
