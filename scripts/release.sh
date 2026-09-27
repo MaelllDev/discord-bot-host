@@ -313,6 +313,7 @@ SYNC_DIRS=(
   "server/tests"
   "web/src"
   "web/tests"
+  "web/public"
 )
 # Single files taken from the source project.
 SYNC_FILES=(
