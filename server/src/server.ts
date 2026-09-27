@@ -1,6 +1,6 @@
 import fs from "node:fs";
 import Fastify from "fastify";
-import type { FastifyInstance, FastifyReply, FastifyRequest } from "fastify";
+import type { FastifyInstance, FastifyReply, FastifyRequest, FastifyServerOptions } from "fastify";
 import cookie from "@fastify/cookie";
 import multipart from "@fastify/multipart";
 import fastifyStatic from "@fastify/static";
@@ -15,7 +15,13 @@ import { ImageStore } from "./apps/images.ts";
 import { BackupService } from "./apps/backups.ts";
 import { AiService } from "./ai/service.ts";
 import { NotifyService, startStatusWatcher } from "./notify/webhooks.ts";
-import { LoginThrottle, resolvePasswordSource } from "./auth.ts";
+import {
+  LoginThrottle,
+  PASSWORD_HASH_SETTING,
+  PasswordResetService,
+  RecoverThrottle,
+  resolvePasswordSource,
+} from "./auth.ts";
 import { registerRoutes } from "./routes/index.ts";
 import { isAuthenticated } from "./routes/auth.ts";
 import { AppError, UnauthorizedError, errorMessage } from "./errors.ts";
@@ -25,7 +31,18 @@ import { UnsafeArchiveError } from "./util/archive.ts";
 import type { AppContext } from "./context.ts";
 
 /** Rotas que não exigem sessão. */
-const PUBLIC_ROUTES = new Set(["/api/health", "/api/auth/login", "/api/auth/logout", "/api/auth/session"]);
+const PUBLIC_ROUTES = new Set([
+  "/api/health",
+  "/api/auth/login",
+  "/api/auth/logout",
+  "/api/auth/session",
+  // Pré-autenticação por natureza: a recuperação serve justamente quem está
+  // fora do painel. Sem condição segura (env vars), as rotas de token/reset nem
+  // são registradas e viram 404; o GET de disponibilidade responde sempre.
+  "/api/auth/recover",
+  "/api/auth/recover/token",
+  "/api/auth/recover/reset",
+]);
 /** GETs públicos adicionais (a mutação continua exigindo sessão). */
 const PUBLIC_GETS = new Set(["/api/branding"]);
 
@@ -36,9 +53,11 @@ export interface BuiltServer {
 
 /**
  * Monta o servidor completo (plugins, rotas, guarda de sessão) sem escutar
- * portas — o que também permite testar com `server.inject`.
+ * portas — o que também permite testar com `server.inject`. O `logger` é
+ * opcional: a suíte usa um stream próprio para capturar o que o painel
+ * escreve no log (por exemplo, a recuperação de senha).
  */
-export async function buildServer(config: PanelConfig): Promise<BuiltServer> {
+export async function buildServer(config: PanelConfig, logger?: FastifyServerOptions["logger"]): Promise<BuiltServer> {
   const store = await Store.open(config.dataDir);
   const docker = new DockerService(config.dockerSocket, config.instanceId);
   const apps = new AppService(config, store, docker);
@@ -67,14 +86,22 @@ export async function buildServer(config: PanelConfig): Promise<BuiltServer> {
     uploads,
     images,
     notify,
-    password: resolvePasswordSource(config),
+    // O hash de uma senha redefinida no painel vive no banco e tem prioridade
+    // sobre a senha inicial gerada no primeiro boot.
+    password: resolvePasswordSource(config, store.getSetting(PASSWORD_HASH_SETTING)),
     throttle: new LoginThrottle(),
+    recoverThrottle: new RecoverThrottle(),
+    resetTokens: new PasswordResetService(config.dataDir),
+    resetThrottle: new LoginThrottle(6, 15 * 60 * 1000),
     session: { epoch: Number.parseInt(store.getSetting("session_epoch") ?? "0", 10) || 0 },
     startedAt: Date.now(),
   };
+  // Um token pendente não sobrevive a um restart (o estado é em memória):
+  // apagar o arquivo antigo evita que ele pareça válido para o administrador.
+  context.resetTokens.clearStale();
 
   const server = Fastify({
-    logger: {
+    logger: logger ?? {
       level: process.env["LOG_LEVEL"] ?? "info",
       transport: undefined,
     },

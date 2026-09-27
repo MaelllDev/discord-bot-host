@@ -50,9 +50,10 @@ async function main(): Promise<void> {
       server.log.warn(`Falha na inicialização automática das aplicações: ${errorMessage(error)}`);
     });
 
-  if (context.password.generated) {
-    server.log.warn(`Senha inicial gerada: ${context.password.generated}`);
-    server.log.warn(`Defina BOTPANEL_PASSWORD no serviço e reinicie para trocar a senha (arquivo ${config.dataDir}/.initial-password).`);
+  if (context.password.origin === "generated") {
+    // A senha em si nunca vai para o log: ela fica no arquivo 0600 logo abaixo.
+    server.log.warn(`Senha inicial gerada: leia o arquivo ${config.dataDir}/.initial-password no servidor (sudo cat).`);
+    server.log.warn("Defina BOTPANEL_PASSWORD no serviço e reinicie para fixar a senha e dispensar o arquivo.");
   }
 
   server.log.info(`Dados em ${config.dataDir} (instância ${config.instanceId})`);

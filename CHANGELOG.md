@@ -10,6 +10,10 @@ before being published, so there is no earlier version history to import.
 
 ## [Unreleased]
 
+## [1.0.5] - 2026-09-27
+
+Password recovery was reworked so no credential ever reaches the log. The login screen now always offers "Forgot your password?": when the panel owns the password (no BOTPANEL_PASSWORD / BOTPANEL_PASSWORD_HASH), it issues a single-use token valid for 15 minutes, written only to <DATA_DIR>/reset-token with mode 0600, and sets a new password (at least 8 characters) through it — the token is consumed on use, the bootstrap .initial-password file is deleted so the old password stops working, and every open session is invalidated. When the password comes from the environment, the entry explains how to change it on the server instead of pretending to reset it. Both endpoints are rate limited per client address (token creation: one request per 10 minutes; redemption: six attempts per 15 minutes) and invalid, expired or already-used tokens get the same response, so states cannot be enumerated. The password generated on first boot is no longer written to the journal either: the log only points to the 0600 file.
+
 ## [1.0.4] - 2026-09-27
 
 Theme system with three options: light (new default, following the design language), dark, and the previous violet look as legacy — selectable from the navbar, login and settings. Language switcher rebuilt as a globe button with a menu. Applications page now toggles between cards and list with a persisted preference. Unsaved-changes bar on the application settings page with navigation blocking. Drag & drop ZIP upload in the update-code dialog, rejecting non-zip files with a clear message. New panel icons (favicon and logos) now ship with releases. Fixes: icon URL validator accepts internal upload paths, and the status watcher no longer throws unhandled rejections when the database closes on shutdown.
@@ -102,7 +106,8 @@ First public release.
 - Test suite: backend unit/integration tests, frontend render tests (jsdom) and a Docker
   end-to-end suite covering the full container lifecycle.
 
-[Unreleased]: https://github.com/MaelllDev/discord-bot-host/compare/v1.0.4...HEAD
+[Unreleased]: https://github.com/MaelllDev/discord-bot-host/compare/v1.0.5...HEAD
+[1.0.5]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.0.5
 [1.0.4]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.0.4
 [1.0.3]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.0.3
 [1.0.2]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.0.2

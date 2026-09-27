@@ -8,7 +8,7 @@ import type { ImageStore } from "./apps/images.ts";
 import type { BackupService } from "./apps/backups.ts";
 import type { AiService } from "./ai/service.ts";
 import type { NotifyService } from "./notify/webhooks.ts";
-import type { LoginThrottle, PasswordSource } from "./auth.ts";
+import type { LoginThrottle, PasswordResetService, PasswordSource, RecoverThrottle } from "./auth.ts";
 
 export interface AppContext {
   config: PanelConfig;
@@ -23,6 +23,12 @@ export interface AppContext {
   notify: NotifyService;
   password: PasswordSource;
   throttle: LoginThrottle;
+  /** Janela mínima entre pedidos de token de recuperação por IP. */
+  recoverThrottle: RecoverThrottle;
+  /** Tokens de recuperação de senha (uso único, guardados em arquivo 0600). */
+  resetTokens: PasswordResetService;
+  /** Limite de tentativas de redefinição de senha por IP. */
+  resetThrottle: LoginThrottle;
   /** Geração atual das sessões (incrementada a cada logout). */
   session: { epoch: number };
   startedAt: number;

@@ -524,7 +524,26 @@ export const ptBR: Record<string, string> = {
   "login.submit": "Entrar",
   "login.submitting": "Entrando…",
   "login.hint.before": "A senha é definida pela variável",
-  "login.hint.after": ". No primeiro boot o painel gera uma senha e a registra no log do serviço.",
+  "login.hint.after": ". Sem ela, o painel gera uma senha no primeiro boot e a guarda em um arquivo no servidor.",
+  "login.recover.link": "Esqueci minha senha",
+  "login.recover.title": "Redefinir a senha com um token",
+  "login.recover.body":
+    "O painel gera um token temporário de uso único (válido por 15 minutos) e o grava em um arquivo no servidor. Só quem tem acesso à VPS consegue ler o token, e a senha atual nunca é exibida nem registrada em log. Deseja continuar?",
+  "login.recover.confirm": "Gerar token",
+  "login.recover.env.title": "Este painel não redefine a senha pela interface",
+  "login.recover.env.body":
+    "A senha aqui é definida por BOTPANEL_PASSWORD ou BOTPANEL_PASSWORD_HASH no arquivo de ambiente do serviço, então só quem tem acesso ao servidor pode trocá-la. Edite o arquivo e reinicie o serviço — ou, se nenhuma senha foi definida, leia a senha gerada no diretório de dados:",
+  "login.recover.token.title": "Token gerado — vale por {minutes} min",
+  "login.recover.token.body": "No servidor, leia o arquivo do token:",
+  "login.recover.token": "Token",
+  "login.recover.newPassword": "Nova senha",
+  "login.recover.confirmPassword": "Confirmar nova senha",
+  "login.recover.submit": "Redefinir senha",
+  "login.recover.reset": "Senha redefinida. Entre com a nova senha.",
+  "login.recover.needToken": "Cole o token que está no arquivo do servidor.",
+  "login.recover.tooShort": "A nova senha precisa de pelo menos {count} caracteres.",
+  "login.recover.mismatch": "As duas senhas não são iguais.",
+  "login.recover.wait": "Aguarde {minutes} min antes de pedir novamente.",
 
   // -------------------------------------------------------------- aplicações (página)
   "apps.subtitle": "{total} aplicação(ões) · {online} em execução",

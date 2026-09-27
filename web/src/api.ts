@@ -203,6 +203,18 @@ export const api = {
   session: () => request<{ authenticated: boolean; panelName?: string }>("/api/auth/session"),
   login: (password: string) => request<{ authenticated: boolean }>("/api/auth/login", { method: "POST", body: { password } }),
   logout: () => request<{ authenticated: boolean }>("/api/auth/logout", { method: "POST" }),
+  /**
+   * Recuperação de senha (só existe quando nenhuma variável de ambiente define
+   * a senha). Gera um token de uso único arquivado no servidor e troca a senha
+   * por ele — a senha atual nunca trafega nem vai para o log.
+   */
+  recoverStatus: () => request<{ available: boolean }>("/api/auth/recover"),
+  recoverToken: () =>
+    request<{ ok: boolean; expiresInSeconds: number; tokenFile: string }>("/api/auth/recover/token", {
+      method: "POST",
+    }),
+  recoverReset: (token: string, password: string) =>
+    request<{ ok: boolean }>("/api/auth/recover/reset", { method: "POST", body: { token, password } }),
 
   system: () => request<SystemInfo>("/api/system"),
   events: (limit = 30) => request<{ events: ActivityEvent[] }>(`/api/events?limit=${limit}`),

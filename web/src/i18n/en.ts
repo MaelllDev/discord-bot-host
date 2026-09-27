@@ -520,10 +520,27 @@ export const en: Record<string, string> = {
   "login.expired": "Your session expired. Sign in again to continue.",
   "login.password": "Panel password",
   "login.submit": "Sign in",
-  "login.submitting": "Signing in…",
-  "login.hint.before": "The password is set by the",
-  "login.hint.after":
-    " variable. On first boot the panel generates a password and logs it in the service log.",
+  "login.submitting": "Signing in…",  "login.hint.before": "The password is set by the",
+  "login.recover.link": "Forgot your password?",
+  "login.recover.title": "Reset the password with a token",
+  "login.recover.body":
+    "The panel creates a single-use temporary token (valid for 15 minutes) and writes it to a file on the server. Only someone with access to the VPS can read it, and the current password is never displayed or written to any log. Continue?",
+  "login.recover.confirm": "Create token",
+  "login.recover.env.title": "This panel does not reset the password from the interface",
+  "login.recover.env.body":
+    "The password here is set by BOTPANEL_PASSWORD or BOTPANEL_PASSWORD_HASH in the service environment file, so only someone with server access can change it. Edit the file and restart the service — or, if no password was ever set, read the generated one in the data directory:",
+  "login.recover.token.title": "Token created — valid for {minutes} min",
+  "login.recover.token.body": "On the server, read the token file:",
+  "login.recover.token": "Token",
+  "login.recover.newPassword": "New password",
+  "login.recover.confirmPassword": "Confirm new password",
+  "login.recover.submit": "Reset password",
+  "login.recover.reset": "Password reset. Sign in with the new password.",
+  "login.recover.needToken": "Paste the token from the file on the server.",
+  "login.recover.tooShort": "The new password needs at least {count} characters.",
+  "login.recover.mismatch": "The two passwords do not match.",
+  "login.recover.wait": "Wait {minutes} min before requesting again.",
+  "login.hint.after": " variable. On first boot the panel generates a password and logs it in the service log.",
 
   // ------------------------------------------------------------ applications page
   "apps.subtitle": "{total} application(s) · {online} running",
