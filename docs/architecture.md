@@ -15,6 +15,7 @@ flowchart TB
         APPS[AppService<br/>deploy · start/stop · releases · backups]
         FILES[FileService]
         AI[AiService]
+        CF[CloudflareService<br/>panel integration]
         STORE[(SQLite<br/>node:sqlite)]
         AUTH[Auth<br/>scrypt · HMAC cookie]
     end
@@ -29,6 +30,7 @@ flowchart TB
     subgraph dkr[Docker daemon]
         CONT[container per application<br/>limits · isolated network]
         JOB[disposable job container<br/>dependency install]
+        TUN[botpanel-cloudflared<br/>unless-stopped · no ports]
     end
 
     SPA -->|HTTPS + cookie| ROUTES
@@ -37,6 +39,10 @@ flowchart TB
     ROUTES --> APPS
     ROUTES --> FILES
     ROUTES --> AI
+    ROUTES --> CF
+    CF --> STORE
+    CF -->|create · start · stop · logs| TUN
+    TUN -.->|outbound tunnel| CLOUDFLARE[(Cloudflare edge)]
     APPS --> STORE
     APPS --> REL
     APPS --> SHARED
@@ -71,6 +77,7 @@ flowchart TB
 | `src/auth.ts` | Password verification (plain or scrypt), HMAC session tokens, login throttling, session epoch |
 | `src/apps/` | Domain logic: `detect.ts` (runtime), `spec.ts` (container spec + restart policy), `service.ts` (create/update/deploy/start/stop/releases), `files.ts`, `backups.ts`, `uploads.ts`, `status.ts` (stop intent) |
 | `src/docker/` | `service.ts` (client wrapper with retry and transient-error detection), `parse.ts` (stats, timestamps, state mapping), `templates.ts` (image presets and command rendering) |
+| `src/cloudflare/` | Panel integration: `config.ts` (stored configuration, token masking/redaction, shape validation) and `service.ts` (managed `cloudflared` container, actions, status derived from the connector logs, boot reconciliation) |
 | `src/ws/stream.ts` | Per-application channel: replays the current run's logs, streams metrics, forwards stdin |
 | `src/ai/` | `providers.ts` (8 providers, three API shapes), `prompt.ts` (prompt + secret redaction), `service.ts` (settings, model listing, analyses) |
 | `src/util/` | Archive extraction (zip-slip safe), filesystem helpers, slug, mutex, formatting |
@@ -81,7 +88,7 @@ flowchart TB
   primitives (`components/ui.tsx`).
 - Routing with React Router. Pages: Dashboard, Applications, New application, Application detail
   (tabs: Overview, Console, Logs, Files, Configuration, Releases, Backups), Backups, System,
-  Settings, Login.
+  Cloudflare Tunnel, Settings, Login.
 - `api.ts` is the single place that issues HTTP requests (typed, with a shared `401` handler that
   redirects to the login screen).
 - `hooks.ts` holds `useAsync` (loading/error/polling that pauses when the tab is hidden),
@@ -98,21 +105,25 @@ flowchart TB
 | `releases` | immutable releases: sequence, directory, image, entry, commands, size, notes |
 | `deployments` | deployment log and status (`running`/`success`/`failed`) |
 | `events` | activity feed (created, started, stopped, released, backup, AI analysis…) |
-| `settings` | key/value settings, including the AI configuration |
+| `settings` | key/value settings, including the AI configuration and the Cloudflare tunnel (`cloudflare.tunnel`) |
 | `backups` | backup files (name, path, size, status, whether `/data` was included) |
 | `ai_analyses` | AI analyses per application (provider, model, excerpt, result, error) |
+| `metric_samples` | CPU/RAM samples taken once a minute (≈25 h retained per application, pruned on insert) |
 
 Migrations are additive and idempotent: new columns are added with `ALTER TABLE ... ADD COLUMN` when
 missing, so upgrading the panel never requires manual database work.
 
 ## Deploy pipeline
 
-1. **Upload** — the ZIP goes to `tmp/uploads`, is size-checked, and the archive is inspected for
-   entries (zip-slip protection: absolute paths and `..` are rejected).
+1. **Upload** — the package goes to `tmp/uploads`, is size-checked, and the archive is inspected for
+   entries (zip-slip protection: absolute paths and `..` are rejected). `.zip` is extracted with a
+   streaming reader (`yauzl`); `.7z`, `.rar`, `.tar.gz` and `.tar.xz` go through `libarchive-wasm`,
+   which reads the archive in memory (hence the 256 MB cap) but validates every entry — path, type
+   and size — before writing.
 2. **Detection** — runtime, entry file, dependency file and commands are inferred from the archive
    (`package.json`, `requirements.txt`, common entry names) and shown to the user before creation.
 3. **Release** — a new `releases/N` directory is created and the archive extracted into it. A single
-   wrapper folder is stripped when the ZIP has one.
+   wrapper folder is stripped when the package has one.
 4. **Dependencies** — a disposable container runs inside the release (`node:22-slim` +
    `npm install`/`npm ci`, `python:3.12-slim` + `pip install --requirement requirements.txt` into a
    release-local directory). The job container has the same resource limits and is removed
@@ -141,6 +152,19 @@ For each application:
 Every container and network carries `botpanel.instance` and `botpanel.app` labels. That is what makes
 reconciliation safe: a panel instance only ever removes resources it created, so two panels pointing
 at the same Docker daemon do not fight.
+
+### The Cloudflare Tunnel container is not an application
+
+The connector the panel runs (`botpanel-cloudflared`, see
+[cloudflare-tunnel](cloudflare-tunnel.md)) is deliberately outside the application model:
+
+- it carries `botpanel.managed`, `botpanel.component=cloudflare-tunnel` and `botpanel.instance`, but
+  **not** `botpanel.app` — the label application reconciliation looks for. It therefore never appears
+  in the applications list and is never collected as an orphan;
+- it has a fixed name, no published ports (the tunnel is outbound-only) and `unless-stopped`, which
+  the panel respects: a container the user *disconnected* is not restarted at boot;
+- it is only ever created, started, stopped or removed after the panel checks those labels, so a
+  container with the same name that belongs to something else is never adopted.
 
 ## Automation switches → Docker restart policy
 

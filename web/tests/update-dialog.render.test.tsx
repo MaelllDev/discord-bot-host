@@ -155,7 +155,28 @@ describe("diálogo de atualização de código", () => {
     expect(container.textContent).toContain("runtime");
   });
 
-  it("recusa arquivo que não é .zip com um aviso", async () => {
+  it.each([
+    ["bot.7z", "application/x-7z-compressed"],
+    ["bot.rar", "application/vnd.rar"],
+    ["bot.tar.gz", "application/gzip"],
+    ["bot.tar.xz", "application/x-xz"],
+  ])("aceita %s por drag & drop", async (name, type) => {
+    const container = await renderDialog();
+
+    const zone = container.querySelector<HTMLElement>('[data-testid="update-dropzone"]');
+    expect(zone).not.toBeNull();
+
+    await act(async () => {
+      zone!.dispatchEvent(dropEvent(makeFile(name, type)));
+    });
+    await flush();
+
+    // Também saiu da etapa "select": o pacote foi aceito para upload.
+    expect(container.querySelector('[data-testid="update-dropzone"]')).toBeNull();
+    expect(container.textContent).toContain(name);
+  });
+
+  it("recusa um arquivo que não é pacote suportado, com aviso", async () => {
     const container = await renderDialog();
 
     const zone = container.querySelector<HTMLElement>('[data-testid="update-dropzone"]')!;
@@ -166,7 +187,7 @@ describe("diálogo de atualização de código", () => {
 
     // Continua na etapa de seleção e mostra a mensagem de recusa.
     expect(container.querySelector('[data-testid="update-dropzone"]')).not.toBeNull();
-    expect(container.textContent).toContain("não é um arquivo .zip");
+    expect(container.textContent).toContain("não é um pacote suportado (zip, 7z, rar, tar.gz ou tar.xz)");
     expect(container.textContent).toContain("foto.png");
   });
 });

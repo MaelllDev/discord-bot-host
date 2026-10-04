@@ -6,7 +6,11 @@ import type { FileService } from "./apps/files.ts";
 import type { UploadStore } from "./apps/uploads.ts";
 import type { ImageStore } from "./apps/images.ts";
 import type { BackupService } from "./apps/backups.ts";
+import type { MetricsService } from "./apps/metrics.ts";
+import type { RestoreService } from "./apps/restore.ts";
+import type { UrlFetchService } from "./apps/fetchurl.ts";
 import type { AiService } from "./ai/service.ts";
+import type { CloudflareService } from "./cloudflare/service.ts";
 import type { NotifyService } from "./notify/webhooks.ts";
 import type { LoginThrottle, PasswordResetService, PasswordSource, RecoverThrottle } from "./auth.ts";
 
@@ -21,6 +25,11 @@ export interface AppContext {
   uploads: UploadStore;
   images: ImageStore;
   notify: NotifyService;
+  /** Integração do painel com o Cloudflare Tunnel (container `cloudflared`). */
+  cloudflare: CloudflareService;
+  metrics: MetricsService;
+  restore: RestoreService;
+  urlFetch: UrlFetchService;
   password: PasswordSource;
   throttle: LoginThrottle;
   /** Janela mínima entre pedidos de token de recuperação por IP. */

@@ -13,7 +13,8 @@ against:
 - one application reading or writing another application's files;
 - an application reaching the network of another application;
 - leaked credentials in logs;
-- an unauthenticated stranger reaching the panel over the network.
+- an unauthenticated stranger reaching the panel over the network;
+- the panel becoming reachable from the internet by accident (see [Cloudflare Tunnel](#cloudflare-tunnel-token)).
 
 What it does **not** defend against:
 
@@ -80,16 +81,69 @@ Processes started inside a container share the kernel with the host: the control
 and namespace limits, not a virtual machine. A container escape (kernel vulnerability) is out of
 scope, as is protecting the host from code you intentionally run.
 
+The **Cloudflare Tunnel connector** is a panel integration, not an application: it runs
+`cloudflare/cloudflared:latest` with `CapDrop: ["ALL"]`, `no-new-privileges`, `unless-stopped`, no
+published ports and `json-file` logs capped at 5 MB × 1 file. It is identified by its own labels
+(`botpanel.component=cloudflare-tunnel` + `botpanel.instance`) and the panel refuses to touch a
+container with that name that is not ours.
+
+## Cloudflare Tunnel token
+
+- The tunnel token is stored in the panel's database (`settings`, key `cloudflare.tunnel`) beside the
+  AI key. It is **never returned by the API**: the interface receives `tokenSet: true` and a masked
+  hint (`eyJh••••fQ==`). Saving the form without typing a token keeps the stored one.
+- Every log line, error message and state field the panel produces passes through redaction, which
+  removes the stored token value, its URL-encoded form and the generic credential patterns listed
+  under [AI redaction](#ai-redaction). The connector's own output is redacted before it reaches the
+  **Diagnostics** panel or `GET /api/cloudflare/logs`.
+- The token is never accepted through a query string, never written to URL paths, container names or
+  container labels, and never stored in the browser (no `localStorage`, no persisted frontend state).
+- It **does** appear in the container's command line (`cloudflared … --token <TOKEN>`), which is how
+  the connector receives it. Anyone able to inspect containers on the host can read it — that is
+  already equivalent to root on the host, which is the trust level the panel assumes anyway.
+- There is **no encryption at rest**. The project has no secret vault and encrypting the value with a
+  key stored next to it would not protect anything; the protections that exist are the permissions of
+  the data directory (`/var/lib/botpanel`, mode `0750`, owned by root) and the secret never leaving
+  the process. The same applies to the AI key and to the panel password hash.
+- **Remove configuration** deletes the token from the database and the container from Docker. A
+  *Disconnect*, in contrast, keeps both — it only stops the connector and records that the user does
+  not want it running.
+
+### Exposing the panel through a tunnel
+
+The tunnel removes the need for an inbound port, but it does not make the panel safer by itself:
+
+1. Create the tunnel in Cloudflare Zero Trust and paste its token into the panel.
+2. Point the tunnel's public hostname at `http://host.docker.internal:8080`.
+3. **Add a Cloudflare Access policy** (self-hosted application, e-mail OTP or an IP allowlist) for
+   that hostname. Without it, the panel's single password is the only barrier between the internet
+   and an administrative interface that can control Docker on your VPS.
+4. The connector reaches the panel through the **Docker gateway**, so the panel has to listen on a
+   container-reachable address: keep `BOTPANEL_HOST` at `0.0.0.0` (its default). Binding it to
+   `127.0.0.1` would leave the connector with nothing to connect to. That is the trade-off of this
+   setup — the port is no longer loopback-only, so the host firewall is what keeps 8080 closed from
+   the outside (allow 22/80/443 and the Docker network, block the rest).
+
+If you can avoid publishing the panel at all, do it: the tunnel is a convenience, not a hardening
+step.
+
 ## Filesystem and path safety
 
-- ZIP uploads are extracted entry by entry: absolute paths, `..` segments and paths escaping the
-  target directory are rejected, and the archive is size-checked before extraction.
+- Uploaded packages (`.zip`, `.7z`, `.rar`, `.tar.gz`, `.tar.xz`) are extracted entry by entry: absolute paths, `..`
+  segments and paths escaping the target directory are rejected, and the archive is size-checked
+  before extraction. Symlinks, hardlinks and special files are refused, and macOS/Windows junk is
+  skipped. Encrypted archives are rejected.
 - The file manager only serves two roots per application: the active release (`code`) and the
   persistent directory (`data`). The resolved path is verified to stay inside of them, so
   `../../etc/passwd` and symlink escapes are refused.
 - Files created inside a container are owned by `BOTPANEL_RUN_UID`; the panel adjusts ownership of
   the release and the persistent directory after a deploy.
-- Uploaded ZIPs live in `<BOTPANEL_DATA_DIR>/tmp/uploads` and are pruned periodically.
+- Uploaded packages live in `<BOTPANEL_DATA_DIR>/tmp/uploads` and are pruned periodically. `.7z`,
+  `.rar`, `.tar.gz` and `.tar.xz` are decompressed **in memory** (capped at 256 MB) because the WASM
+  decoder has no streaming API; `.zip` is streamed from disk.
+- Packages fetched **by URL** are downloaded over http(s) only, stream straight to disk under the
+  same size cap as browser uploads, and the transfer is aborted mid-stream if the server sends more
+  than the cap. After the download, the archive goes through the exact same validation as an upload.
 
 ## Secret handling
 
@@ -129,7 +183,8 @@ it anywhere, and check the provider's privacy policy.
 
 ## Operating recommendations
 
-1. Never expose port 8080 to the internet — bind it to `127.0.0.1` and use HTTPS in front.
+1. Never expose port 8080 to the internet — bind it to `127.0.0.1` and use HTTPS in front, or use
+   **Cloudflare Tunnel** (outbound-only) with a Cloudflare Access policy on the hostname.
 2. Use a long password (or a scrypt hash) and keep `/etc/botpanel.env` at mode `600`.
 3. Keep the host, Docker and Node.js updated.
 4. Whitelist Docker images with `BOTPANEL_ALLOWED_IMAGES` if you want a guard rail.

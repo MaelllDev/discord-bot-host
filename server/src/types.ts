@@ -154,6 +154,32 @@ export interface AiSettingsView {
   apiKeyHint: string;
 }
 
+/**
+ * Uma amostra de CPU/RAM colhida pelo painel para o gráfico de 24 h.
+ * `status` é o estado do container naquele instante ("running", "stopped"…).
+ */
+export interface MetricSampleRecord {
+  ts: string;
+  status: string;
+  cpuPercent: number;
+  memoryBytes: number;
+  memoryLimitBytes: number;
+  memoryPercent: number;
+  pids: number;
+}
+
+/** Entrada para registrar uma amostra de métricas. */
+export interface MetricSampleInput {
+  appId: string;
+  ts: string;
+  status: string;
+  cpuPercent: number;
+  memoryBytes: number;
+  memoryLimitBytes: number;
+  memoryPercent: number;
+  pids: number;
+}
+
 /** Uma análise de logs feita por IA, com o trecho exato que foi enviado. */
 export interface AiAnalysisRecord {
   id: number;

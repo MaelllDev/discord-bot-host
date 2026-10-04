@@ -172,6 +172,17 @@ export interface UploadResult {
   detection: ProjectDetection;
 }
 
+/** Uma amostra do histórico de CPU/RAM da aplicação (gráfico de 24 h). */
+export interface MetricSample {
+  ts: string;
+  status: string;
+  cpuPercent: number;
+  memoryBytes: number;
+  memoryLimitBytes: number;
+  memoryPercent: number;
+  pids: number;
+}
+
 export interface FileEntry {
   name: string;
   type: "file" | "directory" | "symlink" | "other";
@@ -263,4 +274,36 @@ export interface StreamLine {
   id: number;
   stream: "stdout" | "stderr" | "system";
   line: string;
+}
+
+/**
+ * Estado do túnel. `state` descreve a CONEXÃO com a Cloudflare; `containerStatus`
+ * descreve o container. Um container rodando não implica túnel conectado.
+ */
+export type TunnelState = "not_configured" | "stopped" | "starting" | "connected" | "disconnected" | "error" | "unknown";
+
+/** Estado seguro da integração — o servidor nunca devolve o token. */
+export interface TunnelView {
+  configured: boolean;
+  enabled: boolean;
+  tokenSet: boolean;
+  /** Dica mascarada (ex.: `eyJh••••TW1M`); string vazia quando não há token. */
+  tokenHint: string;
+  state: TunnelState;
+  containerName: string;
+  containerId: string | null;
+  image: string;
+  restartPolicy: string | null;
+  containerStatus: AppStatus | null;
+  uptimeSeconds: number | null;
+  startedAt: string | null;
+  exitCode: number | null;
+  dockerAvailable: boolean;
+  /** Último erro, já sem o token. */
+  lastError: string | null;
+  /** Código estável para traduzir (`cloudflare.*`). */
+  lastErrorCode: string | null;
+  createdAt: string | null;
+  updatedAt: string | null;
+  lastConnectedAt: string | null;
 }

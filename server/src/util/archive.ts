@@ -4,8 +4,10 @@ import { pipeline } from "node:stream/promises";
 import fsp from "node:fs/promises";
 import yauzl from "yauzl";
 import type { Entry, ZipFile } from "yauzl";
+import { ArchiveReader, libarchiveWasm } from "libarchive-wasm";
+import type { LibarchiveWasm } from "libarchive-wasm";
 import { PathEscapeError, resolveWithin } from "./paths.ts";
-import { ensureDir } from "./fsx.ts";
+import { ensureDir, rmrf } from "./fsx.ts";
 
 export interface ZipEntryInfo {
   /** Caminho completo dentro do ZIP, com `/`. */
@@ -39,6 +41,13 @@ export class UnsafeArchiveError extends Error {
 
 const DEFAULT_MAX_ENTRIES = 20_000;
 const DEFAULT_MAX_TOTAL_BYTES = 2 * 1024 * 1024 * 1024;
+
+/**
+ * 7z, RAR e TAR são extraídos pelo libarchive-wasm, que só sabe ler de memória:
+ * o pacote inteiro precisa caber na RAM do processo. ZIP continua em streaming
+ * pelo yauzl, por isso este limite vale apenas para os outros formatos.
+ */
+const MAX_IN_MEMORY_ARCHIVE_BYTES = 256 * 1024 * 1024;
 
 /** Junk comum de arquivos criados no macOS que só atrapalharia o projeto. */
 function isJunkEntry(fileName: string): boolean {
@@ -109,6 +118,240 @@ export function computeStripPrefix(fileNames: string[]): string | null {
   if (!sawNestedPath || roots.size !== 1) return null;
   const [onlyRoot] = [...roots];
   return onlyRoot ? `${onlyRoot}/` : null;
+}
+
+// ------------------------------------------------------------------ formatos
+
+/**
+ * Formatos de pacote aceitos no upload de uma aplicação. `tar` guarda apenas o
+ * formato (o libarchive detecta a compressão sozinho), enquanto `.tar.gz` e
+ * `.tar.xz` são formas distintas só para as mensagens ao usuário.
+ */
+export type ArchiveFormat = "zip" | "7z" | "rar" | "tar" | "tar.gz" | "tar.xz";
+
+/**
+ * Extensões reconhecidas, da mais longa para a mais curta — a ordem importa
+ * para que `.tar.gz` nunca seja confundido com `.tar`.
+ */
+const ARCHIVE_KINDS: { extension: string; format: ArchiveFormat; label: string }[] = [
+  { extension: ".tar.gz", format: "tar.gz", label: "TAR.GZ" },
+  { extension: ".tgz", format: "tar.gz", label: "TAR.GZ" },
+  { extension: ".tar.xz", format: "tar.xz", label: "TAR.XZ" },
+  { extension: ".txz", format: "tar.xz", label: "TAR.XZ" },
+  { extension: ".zip", format: "zip", label: "ZIP" },
+  { extension: ".7z", format: "7z", label: "7-Zip" },
+  { extension: ".rar", format: "rar", label: "RAR" },
+  { extension: ".tar", format: "tar", label: "TAR" },
+];
+
+/**
+ * Extensões divulgadas nas mensagens de erro/ajuda (sem os apelidos curtos:
+ * `.tgz`, `.txz` e `.tar` são aceitos, mas não precisam aparecer em todo aviso).
+ */
+export const SUPPORTED_ARCHIVE_EXTENSIONS = [".zip", ".7z", ".rar", ".tar.gz", ".tar.xz"] as const;
+
+/** Descrição curta dos formatos aceitos, para mensagens ao usuário. */
+export const SUPPORTED_ARCHIVE_LABEL = SUPPORTED_ARCHIVE_EXTENSIONS.join(", ");
+
+/** Nome amigável do formato para mensagens ao usuário. */
+export function archiveFormatLabel(format: ArchiveFormat): string {
+  return ARCHIVE_KINDS.find((entry) => entry.format === format)?.label ?? "pacote";
+}
+
+/**
+ * Descobre formato e extensão de um pacote pelo nome do arquivo, sempre sem
+ * diferenciar maiúsculas e priorizando a extensão mais longa que casar.
+ */
+export function detectArchive(fileName: string): { format: ArchiveFormat; extension: string } | null {
+  const lower = fileName.toLowerCase();
+  for (const entry of ARCHIVE_KINDS) {
+    if (lower.endsWith(entry.extension)) return { format: entry.format, extension: entry.extension };
+  }
+  return null;
+}
+
+/** Descobre só o formato pela extensão do arquivo (case-insensitive). */
+export function detectArchiveFormat(fileName: string): ArchiveFormat | null {
+  return detectArchive(fileName)?.format ?? null;
+}
+
+/** Indica se o nome termina em uma das extensões de pacote suportadas. */
+export function isSupportedArchive(fileName: string): boolean {
+  return detectArchive(fileName) !== null;
+}
+
+/**
+ * Extrai um pacote para `destDir` escolhendo o extrator pela extensão: ZIP usa
+ * o yauzl (streaming) e 7z/RAR/TAR usam o libarchive-wasm. As mesmas garantias
+ * de segurança valem para todos: nada de path traversal, links ou junk do macOS.
+ */
+export async function extractArchive(
+  archivePath: string,
+  destDir: string,
+  overridePrefix?: string | null,
+  limits: ExtractLimits = {},
+): Promise<ExtractResult> {
+  const format = detectArchiveFormat(archivePath);
+  if (format === null || format === "zip") return extractZip(archivePath, destDir, overridePrefix);
+  return extractWithLibarchive(format, archivePath, destDir, overridePrefix, limits);
+}
+
+/**
+ * Resolve o nome de uma entrada de 7z/RAR/TAR para um caminho dentro de `destDir`,
+ * recusando travessia de diretório, caminhos absolutos e byte nulo — a mesma
+ * proteção usada no caminho do ZIP.
+ */
+export function resolveArchiveEntry(destDir: string, entryPath: string): string {
+  try {
+    return resolveWithin(destDir, entryPath);
+  } catch (error) {
+    if (error instanceof PathEscapeError) {
+      throw new UnsafeArchiveError(`O pacote contém um caminho inválido (${entryPath}).`);
+    }
+    throw error;
+  }
+}
+
+let libarchive: Promise<LibarchiveWasm> | null = null;
+
+/** Carrega o WASM do libarchive uma única vez por processo. */
+function loadLibarchive(): Promise<LibarchiveWasm> {
+  libarchive ??= libarchiveWasm();
+  return libarchive;
+}
+
+/** Move o conteúdo de uma raiz única para cima e remove a pasta que ficou vazia. */
+async function liftSingleRoot(destDir: string, prefix: string | null): Promise<string | null> {
+  if (!prefix) return null;
+  const segments = prefix.replace(/\/+$/, "").split("/").filter(Boolean);
+  if (segments.length === 0) return null;
+  const rootDir = path.join(destDir, ...segments);
+  const stats = await fsp.stat(rootDir).catch(() => null);
+  if (!stats?.isDirectory()) return null;
+  for (const child of await fsp.readdir(rootDir)) {
+    await fsp.rename(path.join(rootDir, child), path.join(destDir, child));
+  }
+  await rmrf(rootDir);
+  return prefix;
+}
+
+/**
+ * Extrai 7z/RAR/TAR em memória com o libarchive. Lê o índice e o conteúdo na
+ * mesma passada: cada entrada é validada (caminho, tipo, tamanho) antes de tocar
+ * o disco, e qualquer violação aborta tudo — o release nunca fica pela metade.
+ */
+async function extractWithLibarchive(
+  format: ArchiveFormat,
+  archivePath: string,
+  destDir: string,
+  overridePrefix: string | null | undefined,
+  limits: ExtractLimits,
+): Promise<ExtractResult> {
+  const label = archiveFormatLabel(format);
+  const stats = await fsp.stat(archivePath);
+  if (stats.size > MAX_IN_MEMORY_ARCHIVE_BYTES) {
+    throw new UnsafeArchiveError(
+      `Pacotes ${label} acima de ${Math.round(MAX_IN_MEMORY_ARCHIVE_BYTES / (1024 * 1024))} MB não são suportados. ` +
+        "Reenvie o projeto como .zip, que é extraído em streaming.",
+    );
+  }
+
+  const maxEntries = limits.maxEntries ?? DEFAULT_MAX_ENTRIES;
+  const maxTotalBytes = limits.maxTotalBytes ?? DEFAULT_MAX_TOTAL_BYTES;
+  const engine = await loadLibarchive();
+
+  await ensureDir(destDir);
+  const extracted: string[] = [];
+  let entries = 0;
+  let files = 0;
+  let bytes = 0;
+  let reader: ArchiveReader | null = null;
+
+  try {
+    reader = new ArchiveReader(engine, new Int8Array(await fsp.readFile(archivePath)));
+    if (reader.hasEncryptedData() === true) {
+      throw new UnsafeArchiveError(`O pacote ${label} está protegido por senha e não pode ser usado.`);
+    }
+
+    for (const entry of reader.entries()) {
+      entries += 1;
+      if (entries > maxEntries) {
+        throw new UnsafeArchiveError(`O pacote contém entradas demais (limite: ${maxEntries}).`);
+      }
+
+      const originalName = entry.getPathname().replace(/\\/g, "/");
+      if (isJunkEntry(originalName)) continue;
+
+      // Prefixo forçado pelo chamador (ex.: restaurar um backup dentro de uma
+      // raiz específica); `null` significa "não remover nada" e `undefined`
+      // deixa a detecção automática de raiz única cuidar disso depois.
+      const entryName =
+        overridePrefix && originalName.startsWith(overridePrefix)
+          ? originalName.slice(overridePrefix.length)
+          : originalName;
+      if (entryName.length === 0) continue;
+
+      const fileType = entry.getFiletype();
+      if (fileType === "Directory") {
+        await ensureDir(resolveArchiveEntry(destDir, entryName));
+        continue;
+      }
+      if (fileType === "SymbolicLink") {
+        throw new UnsafeArchiveError(`O pacote contém um link simbólico (${entryName}), que não é permitido.`);
+      }
+      if (entry.getHardlinkTarget()) {
+        throw new UnsafeArchiveError(`O pacote contém um link rígido (${entryName}), que não é permitido.`);
+      }
+      if (fileType !== "File") {
+        throw new UnsafeArchiveError(`O pacote contém um arquivo especial não suportado (${entryName}).`);
+      }
+
+      const declared = entry.getSize();
+      bytes += declared;
+      if (bytes > maxTotalBytes) {
+        throw new UnsafeArchiveError("Pacote descompactado excede o tamanho máximo permitido.");
+      }
+
+      const destination = resolveArchiveEntry(destDir, entryName);
+      await ensureDir(path.dirname(destination));
+      await fsp.writeFile(destination, readEntryData(entryName, label, entry));
+      extracted.push(entryName);
+      files += 1;
+    }
+  } catch (error) {
+    if (error instanceof UnsafeArchiveError) throw error;
+    // Falhas do próprio libarchive (arquivo corrompido, truncado, formato
+    // diferente do que a extensão promete…) viram 400 com mensagem útil em vez
+    // de um 500 opaco.
+    const message = error instanceof Error ? error.message : String(error);
+    throw new UnsafeArchiveError(
+      `Pacote ${label} inválido ou corrompido — o conteúdo não corresponde à extensão do arquivo. ` +
+        `Detalhe técnico: ${message}`,
+    );
+  } finally {
+    reader?.free();
+  }
+
+  const strippedRoot = overridePrefix === undefined ? computeStripPrefix(extracted) : overridePrefix;
+  const lifted = overridePrefix === undefined ? await liftSingleRoot(destDir, strippedRoot) : null;
+  return { files, bytes, strippedRoot: lifted ?? strippedRoot };
+}
+
+/** Lê o conteúdo de uma entrada, traduzindo falhas do libarchive em erro claro. */
+function readEntryData(
+  entryName: string,
+  label: string,
+  entry: { readData(): Int8Array | undefined },
+): Int8Array {
+  try {
+    return entry.readData() ?? new Int8Array(0);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    if (/encrypt|password|senha|ppmd/i.test(message)) {
+      throw new UnsafeArchiveError(`O pacote ${label} está protegido por senha e não pode ser usado.`);
+    }
+    throw new UnsafeArchiveError(`Não foi possível ler ${entryName} dentro do pacote ${label}: ${message}`);
+  }
 }
 
 /**

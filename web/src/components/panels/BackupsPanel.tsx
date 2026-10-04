@@ -58,6 +58,28 @@ export default function BackupsPanel({ app, embedded = false }: { app: AppSummar
     }
   };
 
+  /**
+   * Restaura o backup: o backend reempacota o código salvo e publica como um
+   * novo release (deploy completo, com instalação de dependências). O link do
+   * deploy aparece na aba de deployments/na página da aplicação.
+   */
+  const restore = async (backup: BackupRecord): Promise<void> => {
+    setBusy(`restore-${backup.id}`);
+    setError(null);
+    try {
+      const result = await api.restoreBackup(app.slug, backup.id);
+      toast.success(t("backups.restore.started", { seq: result.releaseSeq }));
+      setConfirm(null);
+    } catch (caught) {
+      const message = errorText(caught);
+      setError(message);
+      toast.error(message);
+      throw caught;
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const remove = async (backup: BackupRecord): Promise<void> => {
     setBusy(`delete-${backup.id}`);
     setError(null);
@@ -137,12 +159,35 @@ export default function BackupsPanel({ app, embedded = false }: { app: AppSummar
 
               <div className="flex shrink-0 gap-1">
                 {backup.status === "success" ? (
-                  <a
-                    href={api.backupDownloadUrl(app.slug, backup.id)}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-medium text-slate-200 transition hover:border-white/20 hover:bg-white/10"
-                  >
-                    <IconDownload className="h-3.5 w-3.5" /> {t("common.download")}
-                  </a>
+                  <>
+                    <a
+                      href={api.backupDownloadUrl(app.slug, backup.id)}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs font-medium text-slate-200 transition hover:border-white/20 hover:bg-white/10"
+                    >
+                      <IconDownload className="h-3.5 w-3.5" /> {t("common.download")}
+                    </a>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      loading={busy === `restore-${backup.id}`}
+                      onClick={() =>
+                        setConfirm({
+                          title: t("backups.restore.confirmTitle", { name: backup.fileName }),
+                          description: (
+                            <p>
+                              {t("backups.restore.confirmBefore")} <strong>v{app.activeRelease + 1}</strong>{" "}
+                              {t("backups.restore.confirmAfter")}
+                            </p>
+                          ),
+                          confirmLabel: t("backups.restore.label"),
+                          run: () => restore(backup),
+                        })
+                      }
+                      title={t("backups.restore.label")}
+                    >
+                      <IconRefresh className="h-3.5 w-3.5" /> {t("backups.restore.label")}
+                    </Button>
+                  </>
                 ) : null}
                 <Button
                   size="sm"

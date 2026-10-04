@@ -13,7 +13,7 @@ import type {
 } from "../types.ts";
 import { DockerService } from "../docker/service.ts";
 import { getRuntime, parsePortMappings, renderInstallCommand, renderStartCommand } from "../docker/templates.ts";
-import { extractZip } from "../util/archive.ts";
+import { extractArchive } from "../util/archive.ts";
 import { chownRecursive, dirSize, ensureDir, listDirectory, pathExists, rmrf } from "../util/fsx.ts";
 import { humanBytes } from "../util/format.ts";
 import { KeyedMutex } from "../util/mutex.ts";
@@ -490,15 +490,16 @@ export class AppService {
   }
 
   /**
-   * Publica uma nova versão a partir de um ZIP: extrai, instala dependências e
-   * ativa o release. Roda em background; o progresso é acompanhado pela API.
+   * Publica uma nova versão a partir de um pacote (.zip, .7z ou .rar): extrai,
+   * instala dependências e ativa o release. Roda em background; o progresso é
+   * acompanhado pela API.
    */
-  async startDeploy(slug: string, zipPath: string, notes = ""): Promise<StartedDeploy> {
+  async startDeploy(slug: string, archivePath: string, notes = ""): Promise<StartedDeploy> {
     const app = this.mustGet(slug);
     const releaseSeq = this.store.nextReleaseSeq(app.id);
     const deploymentId = this.store.startDeployment(app.id, "deploy", releaseSeq);
     const finished = this.locks.run(slug, () =>
-      this.runDeploy(app, releaseSeq, deploymentId, zipPath, notes),
+      this.runDeploy(app, releaseSeq, deploymentId, archivePath, notes),
     );
     // Erros já ficam registrados no log do deployment.
     const guarded = finished.catch(() => undefined);
@@ -510,7 +511,7 @@ export class AppService {
     app: AppRecord,
     releaseSeq: number,
     deploymentId: number,
-    zipPath: string,
+    archivePath: string,
     notes: string,
   ): Promise<void> {
     const log = new DeploymentLog(this.store, deploymentId);
@@ -523,7 +524,7 @@ export class AppService {
       await rmrf(target);
       await ensureDir(target, 0o750);
       log.write("Extraindo pacote...\n");
-      const extraction = await extractZip(zipPath, target);
+      const extraction = await extractArchive(archivePath, target);
       log.write(
         `✓ ${extraction.files} arquivo(s), ${humanBytes(extraction.bytes)}` +
           (extraction.strippedRoot ? ` (pasta "${extraction.strippedRoot}" removida do pacote)\n` : "\n"),

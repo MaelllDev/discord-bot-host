@@ -10,6 +10,46 @@ before being published, so there is no earlier version history to import.
 
 ## [Unreleased]
 
+## [1.1.0] - 2026-10-04
+
+Uploads now accept `.7z`, `.rar`, `.tar.gz` and `.tar.xz` next to `.zip` (`.tar`, `.tgz` and `.txz`
+are accepted as aliases), for both a new application and a code update. `.zip` keeps the streaming
+`yauzl` extractor; every other format is read with `libarchive-wasm` (MIT), which has no streaming
+API and therefore caps those formats at 256 MB. Every entry is validated before it touches disk —
+absolute and `..` paths are refused, so are symlinks, hardlinks and special files — and encrypted or
+corrupt archives are rejected with a clear message. The detected root-folder stripping, runtime
+detection and deploy pipeline are unchanged. The upload form and the update dialog now accept all of
+the formats (with a clear inline message when another file type is dropped), and the API error for an
+unsupported extension lists all of them.
+
+Three new features ride on the existing deploy pipeline. **Restore backup**: a successful backup can
+be restored as a new immutable release — the panel re-packs the `code/` folder of the backup ZIP and
+runs the same extraction, dependency installation and activation as a manual upload (backups that
+contain only the `/data` volume are refused with a clear message). **Deploy from URL**: the update
+dialog accepts a direct http(s) link; the panel downloads the package with the same size cap as the
+multipart upload and feeds it into the normal flow (only http/https are accepted, and the transfer
+is aborted mid-stream if it exceeds the limit). **Metrics history**: the panel samples CPU and memory
+once a minute into a new `metric_samples` table (≈25 h retained per application, pruned on insert),
+and the application page shows a 24-hour chart, so a memory leak becomes visible before the OOM
+killer strikes.
+
+The panel can now expose **itself** through **Cloudflare Tunnel**, as a panel integration rather than
+an application. Give it the connector token of a tunnel you created in Cloudflare Zero Trust and it
+runs `cloudflare/cloudflared:latest` in a container it manages (`botpanel-cloudflared`,
+`unless-stopped`, no published ports, no host networking), keeping the tunnel up across reboots while
+respecting a deliberate disconnect. The container is labelled `botpanel.managed` /
+`botpanel.component=cloudflare-tunnel` / `botpanel.instance` and deliberately **not** `botpanel.app`,
+so it never appears in the applications list and is never touched by application cleanup; a container
+with the same name that is not ours is refused rather than adopted. The token is stored in the panel
+database, never returned by the API (only `tokenSet` plus a masked hint) and redacted from every log
+line, error and state field the interface can see. Status is honest: "Connected" requires a
+registered connection in the connector's own logs, a running container is not enough, and Docker being
+unreachable is reported as `unknown`. The page has the full lifecycle (connect, disconnect, restart,
+test connection, remove configuration with confirmation) plus a redacted **Diagnostics** panel. No
+Cloudflare API is called in this version: create the tunnel and its public hostname in the dashboard
+and point the hostname at `http://host.docker.internal:8080`. Covered by
+`server/tests/cloudflare.test.ts` and `server/tests/e2e.cloudflare.test.ts`.
+
 ## [1.0.6] - 2026-10-04
 
 Added `scripts/update.sh`, a one-command updater for existing installations:
@@ -128,7 +168,8 @@ First public release.
 - Test suite: backend unit/integration tests, frontend render tests (jsdom) and a Docker
   end-to-end suite covering the full container lifecycle.
 
-[Unreleased]: https://github.com/MaelllDev/discord-bot-host/compare/v1.0.6...HEAD
+[Unreleased]: https://github.com/MaelllDev/discord-bot-host/compare/v1.1.0...HEAD
+[1.1.0]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.1.0
 [1.0.6]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.0.6
 [1.0.5]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.0.5
 [1.0.4]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.0.4

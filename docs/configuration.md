@@ -55,7 +55,7 @@ Put the output in `BOTPANEL_PASSWORD_HASH` and remove/clear `BOTPANEL_PASSWORD`.
 |---|---|---|---|
 | `BOTPANEL_DATA_DIR` | no | `/var/lib/botpanel` | Database, releases, `/data` volumes, temporary uploads. The panel **derives an instance identifier from this path**, so two panels with different data directories never touch each other's containers. |
 | `BOTPANEL_DOCKER_SOCKET` | no | `/var/run/docker.sock` | Docker daemon socket. |
-| `BOTPANEL_MAX_UPLOAD_MB` | no | `512` | Maximum ZIP upload size in MB. |
+| `BOTPANEL_MAX_UPLOAD_MB` | no | `512` | Maximum upload size in MB for `.zip`, `.7z`, `.rar`, `.tar.gz` and `.tar.xz` packages. |
 | `BOTPANEL_KEEP_RELEASES` | no | `10` | Releases kept per application. `0` keeps everything. Older releases are pruned after a successful deploy. |
 
 ### Containers
@@ -79,6 +79,11 @@ Put the output in `BOTPANEL_PASSWORD_HASH` and remove/clear `BOTPANEL_PASSWORD`.
 - **AI provider configuration** (enabled/providers/model/base URL/line count/temperature and the API
   key) is edited in the panel and stored in the `settings` table of the SQLite database. Keys are
   never returned by the API — the interface only learns that a key exists and gets a masked hint.
+- **Cloudflare Tunnel** (token + *Connect with the panel*) is configured on its own page and stored
+  in the same `settings` table, under the key `cloudflare.tunnel`. There is **no environment
+  variable** for it: the token is a secret managed by the panel, never returned by the API and
+  redacted from logs. The tunnel image (`cloudflare/cloudflared:latest`) is fixed and is **not**
+  subject to `BOTPANEL_ALLOWED_IMAGES`, which exists to constrain the images of your applications.
 - **Per-application configuration** (name, description, icon, runtime, image, entry file,
   dependency file, commands, RAM, CPU, PID limit, environment variables, ports, automation switches)
   lives in the database and is edited in the application's **Configuration** tab.

@@ -16,6 +16,7 @@ import {
   IconApps,
   IconArchive,
   IconChevronLeft,
+  IconCloud,
   IconDashboard,
   IconLogout,
   IconMenu,
@@ -54,6 +55,7 @@ const NAV_GROUPS = [
     items: [
       { to: "/backups", labelKey: "nav.backups", icon: IconArchive, end: false },
       { to: "/system", labelKey: "nav.system", icon: IconServer, end: false },
+      { to: "/cloudflare", labelKey: "nav.cloudflare", icon: IconCloud, end: false },
       { to: "/settings", labelKey: "nav.settings", icon: IconSettings, end: false },
     ],
   },
@@ -65,6 +67,7 @@ const PAGE_TITLE_KEYS: Record<string, string> = {
   "/apps/new": "nav.newApp",
   "/backups": "nav.backups",
   "/system": "nav.system",
+  "/cloudflare": "nav.cloudflare",
   "/settings": "nav.settings",
 };
 

@@ -7,6 +7,7 @@ import { registerSystemRoutes } from "./system.ts";
 import { registerAiRoutes } from "./ai.ts";
 import { registerBrandingRoutes } from "./branding.ts";
 import { registerNotifyRoutes } from "./notify.ts";
+import { registerCloudflareRoutes } from "./cloudflare.ts";
 import { registerStreamRoute } from "../ws/stream.ts";
 
 export function registerRoutes(server: FastifyInstance, context: AppContext): void {
@@ -17,5 +18,6 @@ export function registerRoutes(server: FastifyInstance, context: AppContext): vo
   registerFileRoutes(server, context);
   registerAiRoutes(server, context);
   registerNotifyRoutes(server, context);
+  registerCloudflareRoutes(server, context);
   registerStreamRoute(server, context);
 }

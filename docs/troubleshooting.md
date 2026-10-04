@@ -106,6 +106,40 @@ docker info | head -5
 The panel reconnects by itself (the unit uses `Wants=` and not `Requires=`), so restarting Docker
 does not require restarting the panel.
 
+## Cloudflare Tunnel
+
+The page reports two different things on purpose: the **container** state (Docker) and the **tunnel**
+state (connection to Cloudflare). A container that is `running` is not the same as a tunnel that is
+connected — only a `Registered tunnel connection` line in the connector logs makes the page say
+*Connected*. Start with the connector itself:
+
+```bash
+docker ps -a --filter name=botpanel-cloudflared
+docker inspect botpanel-cloudflared --format '{{.State.Status}} {{.HostConfig.RestartPolicy.Name}}'
+docker inspect botpanel-cloudflared --format '{{json .Config.Labels}}'
+docker logs --tail 100 botpanel-cloudflared
+```
+
+| Symptom | Cause / fix |
+|---|---|
+| *Not configured* | No token saved. Paste the connector token from Cloudflare Zero Trust and **Save** |
+| *Docker unavailable* | The panel cannot reach the daemon — see [Docker unavailable](#docker-unavailable). Nothing else on the page can be trusted until it is back |
+| Stuck in *Starting* | Normal for the first ~30 s after **Connect**. After that, the connector has not registered a connection yet — open **Diagnostics** |
+| *No connection* (container running) | The connector is up but never registered: usually a wrong/expired token, or no route to Cloudflare (outbound HTTPS 7844/UDP 7844 blocked by the firewall). The connector's own message appears in **Diagnostics** |
+| *Error* right after **Connect** with `containerNameTaken` | Something else already uses the name `botpanel-cloudflared`. The panel deliberately refuses to touch a container that is not its own — remove or rename that container, then connect again |
+| *Error* with `imagePullFailed` | `cloudflare/cloudflared:latest` could not be pulled: no outbound internet, or the registry is blocked |
+| Tunnel is *Connected* but the URL does not open | The tunnel's **Public hostname** is missing or points somewhere else. It must be service **HTTP** and URL `host.docker.internal:8080` |
+| URL opens but shows a Cloudflare error | The hostname resolves to the tunnel but the panel is not answering: `curl -s http://127.0.0.1:8080/api/health` on the VPS |
+| Tunnel came back after a restart you did not want | **Connect with the panel** is on. Press **Disconnect** — that records the intent and the boot will not restart it |
+| Tunnel does not start after a reboot | **Connect with the panel** is off (or was turned off by **Disconnect**). Enable it and **Save**, then **Connect** |
+| Need to start over | **Remove configuration** deletes the container and the token; create a new connector token in Cloudflare and paste it again |
+
+Rarely useful, but explicit: the panel never publishes a port for the connector, so `ss -ltnp`
+showing nothing new after **Connect** is expected behaviour, not a failure.
+
+If the tunnel-created hostname is protected with **Cloudflare Access**, a browser error about the
+identity provider is a Cloudflare-side policy problem, not a panel problem.
+
 ## Login problems
 
 | Symptom | Cause / fix |
@@ -131,11 +165,12 @@ does not require restarting the panel.
    - **Exit code 137 / `OOMKilled: true`** — the application exceeded its RAM limit. Raise the limit
      in **Configuration** or fix the leak.
    - **Exit code 1 with a Python traceback** — a missing module: the dependency file must be in the
-     ZIP and the panel installs it during the deploy. Re-deploy after fixing `requirements.txt`.
+     uploaded package and the panel installs it during the deploy. Re-deploy after fixing
+     `requirements.txt`.
    - **`ModuleNotFoundError` even with the file present** — the install step failed; check the
      deployment log for the pip error (a wrong package name is the usual reason).
    - **Entry file not found** — the entry in **Configuration** must be the path relative to the
-     project root inside the ZIP.
+     project root inside the uploaded package.
    - **Rebuild loop** — the process exits immediately. Turn off *restart automatically* while you
      debug, otherwise the logs keep being replaced by new boots.
 
@@ -160,9 +195,12 @@ module requiring build tools (`python3`, `make`, `g++` are not in the slim image
 
 - **`413 Payload Too Large`** — raise `BOTPANEL_MAX_UPLOAD_MB` **and** your proxy's body limit
   (`client_max_body_size` in Nginx).
-- **`400` about the archive** — the ZIP is corrupt or contains absolute/`..` paths (rejected on
+- **`400` about the archive** — the package is corrupt or contains absolute/`..` paths (rejected on
   purpose), or a single file is bigger than the limit.
-- The form accepts `.zip` only.
+- The form accepts `.zip`, `.7z`, `.rar`, `.tar.gz` and `.tar.xz`. Encrypted archives are not
+  supported.
+- **`400` for a large `.7z`/`.rar`/`.tar.gz`/`.tar.xz`** — those formats are read in memory and
+  capped at 256 MB; re-zip the project as `.zip` (which streams) to upload it.
 
 ## WebSocket / logs
 

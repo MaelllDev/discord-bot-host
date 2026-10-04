@@ -45,7 +45,7 @@ BOTPANEL_MAX_UPLOAD_MB=64 BOTPANEL_KEEP_RELEASES=2 BOTPANEL_DOCKER_SOCKET=/var/r
 | `npm run build` | frontend build, then backend build (`tsc`) |
 | `npm run typecheck` | `tsc --noEmit` for the backend, the backend tests, the frontend and the frontend tests |
 | `npm test` | backend unit/integration tests + frontend render tests |
-| `npm run test:e2e` | Docker end-to-end suite (`BOTPANEL_E2E=1`, needs root) |
+| `npm run test:e2e` | Docker end-to-end suites: the application lifecycle and the Cloudflare connector (`BOTPANEL_E2E=1`, needs root) |
 | `npm run test --workspace server -- --watch` | backend tests in watch mode |
 
 ## Layout
@@ -58,14 +58,15 @@ server/src/
   db.ts             schema, migrations, every query
   auth.ts           password + session cookie + throttle
   apps/             detect · spec · service · files · backups · uploads · status · paths
+  cloudflare/       panel integration: config (stored token + redaction) · service (cloudflared container)
   docker/           service (client) · parse (stats/logs) · templates (image + commands)
-  routes/           auth · apps · files · ai · system
+  routes/           auth · apps · files · ai · system · notify · cloudflare
   ws/stream.ts      per-application WebSocket
   ai/               providers · prompt (incl. redaction) · service
   util/             archive · fsx · format · mutex · slug · paths · zipwrite
 server/tests/       unit, integration and Docker E2E tests
 web/src/
-  pages/            Dashboard · Apps · AppDetail · NewApp · Backups · System · Settings · Login
+  pages/            Dashboard · Apps · AppDetail · NewApp · Backups · System · Cloudflare · Settings · Login
   components/       Layout · AppCard · AppIcon · dialogs · panels/ · ui.tsx · Toasts · ErrorBoundary
   api.ts            typed API client (single place issuing requests)
   hooks.ts          useAsync · useAppStream · useDeployment
@@ -128,6 +129,13 @@ Notes:
 
 - The Docker E2E suite uses its own temporary data directory and its own instance id, so it can run
   next to a production panel on the same machine. It requires `BOTPANEL_E2E=1`.
+- `npm run test:e2e` runs two files: `server/tests/e2e.docker.test.ts` (application lifecycle) and
+  `server/tests/e2e.cloudflare.test.ts` (a real `botpanel-cloudflared` container created with a
+  **fake token**). The connector suite asserts image, labels, restart policy and the absence of
+  published ports, and it **skips itself** when a connector from another installation already exists,
+  so it can never take over a container that is not its own. Backend tests for the same integration
+  (`server/tests/cloudflare.test.ts`) need no Docker at all: they drive the service against a fake
+  daemon.
 - Frontend render tests run in jsdom (`web/vitest.config.ts`). Mounting a page and asserting the
   visible text is the cheapest way to catch "it compiles but the page is blank".
 - A failed test is a failed release: `scripts/release.sh` refuses to publish.
@@ -146,9 +154,30 @@ with stubs for `systemctl`, `curl`, `npm`, `docker`, `node` and `hostname`, and 
 | `--no-service`, Docker down | warns and still exits 0 (a build does not need the daemon) |
 | systemd present, never healthy | exits non-zero, prints the diagnostics, prints no URL |
 | systemd present, health OK | exits 0, renders the unit and prints the URL |
+| project inside a home directory | warns, installs to `/opt/botpanel`, keeps `ProtectHome=yes` |
+| explicit `--panel-dir` inside a home | renders the unit with `ProtectHome=read-only` so the service can start |
 
 Add a case whenever you touch the installer, and run the suite before a release. `BOTPANEL_INSTALL_TEST_IMAGE`
 overrides the base image.
+
+### Changing the updater
+
+`scripts/update.sh` fetches a newer release for an existing installation and delegates the rebuild to
+the installer, so the pieces worth testing are the ones it owns: finding the installation in the
+systemd unit, choosing the target version, and putting the previous build back when the new one does
+not come up. `scripts/tests/update.test.sh` runs it in the same kind of throwaway container, with a
+`curl` stub that plays the GitHub API, the release tarball and the health endpoint:
+
+| Case | What it proves |
+|---|---|
+| `--check` | reports both versions and neither builds nor touches the service |
+| tarball installation | installs the new sources, rebuilds, rewrites the unit, keeps env and data |
+| new build never healthy | exits non-zero and restores the previous build |
+| installation inside a home directory | the regenerated unit uses `ProtectHome=read-only` |
+| tags but no published release | falls back to the newest tag instead of the branch |
+
+A tarball installation carries an old `scripts/install.sh` in the fixture on purpose: if the updater
+ever ran that copy instead of the downloaded one, the test fails.
 
 ### Changing the release workflow
 

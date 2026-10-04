@@ -10,9 +10,18 @@ import type {
   DeploymentRecord,
   DeploymentStatus,
   EnvVar,
+  MetricSampleInput,
+  MetricSampleRecord,
   ReleaseRecord,
   RuntimeKind,
 } from "./types.ts";
+
+/**
+ * Quantas amostras de métricas manter por aplicação. Com intervalo de 60 s,
+ * 1500 amostras ≈ 25 h — cobre o gráfico de 24 h com folga para amostras
+ * perdidas enquanto o container estava parado.
+ */
+export const METRIC_SAMPLE_KEEP = 1500;
 
 interface AppRow {
   id: string;
@@ -53,6 +62,16 @@ interface AiAnalysisRow {
   error: string;
   created_at: string;
   finished_at: string | null;
+}
+
+interface MetricSampleRow {
+  ts: string;
+  status: string;
+  cpu_percent: number;
+  memory_bytes: number;
+  memory_limit_bytes: number;
+  memory_percent: number;
+  pids: number;
 }
 
 interface ReleaseRow {
@@ -205,6 +224,18 @@ function toAiAnalysis(row: AiAnalysisRow): AiAnalysisRecord {
   };
 }
 
+function toMetricSample(row: MetricSampleRow): MetricSampleRecord {
+  return {
+    ts: row.ts,
+    status: row.status,
+    cpuPercent: row.cpu_percent,
+    memoryBytes: row.memory_bytes,
+    memoryLimitBytes: row.memory_limit_bytes,
+    memoryPercent: row.memory_percent,
+    pids: row.pids,
+  };
+}
+
 function toDeployment(row: DeploymentRow): DeploymentRecord {
   return {
     id: row.id,
@@ -328,10 +359,25 @@ export class Store {
         finished_at TEXT
       );
 
+      -- Amostragem periódica de CPU/RAM por aplicação (gráfico de 24 h).
+      -- Poda pelas próprias linhas: cada app mantém só as amostras recentes.
+      CREATE TABLE IF NOT EXISTS metric_samples (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        app_id TEXT NOT NULL REFERENCES apps(id) ON DELETE CASCADE,
+        ts TEXT NOT NULL,
+        status TEXT NOT NULL,
+        cpu_percent REAL NOT NULL DEFAULT 0,
+        memory_bytes INTEGER NOT NULL DEFAULT 0,
+        memory_limit_bytes INTEGER NOT NULL DEFAULT 0,
+        memory_percent REAL NOT NULL DEFAULT 0,
+        pids INTEGER NOT NULL DEFAULT 0
+      );
+
       CREATE INDEX IF NOT EXISTS idx_releases_app ON releases (app_id, seq DESC);
       CREATE INDEX IF NOT EXISTS idx_ai_analyses_app ON ai_analyses (app_id, id DESC);
       CREATE INDEX IF NOT EXISTS idx_deployments_app ON deployments (app_id, id DESC);
       CREATE INDEX IF NOT EXISTS idx_backups_app ON backups (app_id, id DESC);
+      CREATE INDEX IF NOT EXISTS idx_metric_samples_app ON metric_samples (app_id, id DESC);
     `);
 
     // Colunas adicionadas depois da primeira versão do schema. `CREATE TABLE IF
@@ -663,6 +709,48 @@ export class Store {
       .prepare("UPDATE ai_analyses SET status = 'failed', error = ?, finished_at = ? WHERE status = 'running'")
       .run("Interrompida pelo reinício do painel.", nowIso());
     return Number(result.changes ?? 0);
+  }
+
+  // ------------------------------------------------------------- métricas
+
+  /**
+   * Amostras de CPU/RAM. Dado derivado e podado: cada inserção remove as
+   * amostras antigas da própria aplicação, então a tabela não cresce mesmo
+   * depois de meses — e um app removido some junto (ON DELETE CASCADE).
+   */
+  insertMetricSample(sample: MetricSampleInput): void {
+    this.db
+      .prepare(
+        `INSERT INTO metric_samples (app_id, ts, status, cpu_percent, memory_bytes, memory_limit_bytes, memory_percent, pids)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        sample.appId,
+        sample.ts,
+        sample.status,
+        sample.cpuPercent,
+        sample.memoryBytes,
+        sample.memoryLimitBytes,
+        sample.memoryPercent,
+        sample.pids,
+      );
+    this.db
+      .prepare(
+        `DELETE FROM metric_samples WHERE app_id = ? AND id <= (SELECT MAX(id) - ? FROM metric_samples WHERE app_id = ?)`,
+      )
+      .run(sample.appId, METRIC_SAMPLE_KEEP, sample.appId);
+  }
+
+  /** Amostras recentes em ordem cronológica (antigo → novo), para desenhar a série. */
+  listMetricSamples(appId: string, limit = METRIC_SAMPLE_KEEP): MetricSampleRecord[] {
+    const rows = this.db
+      .prepare(
+        `SELECT * FROM (
+           SELECT * FROM metric_samples WHERE app_id = ? ORDER BY id DESC LIMIT ?
+         ) ORDER BY id ASC`,
+      )
+      .all(appId, limit) as unknown as MetricSampleRow[];
+    return rows.map(toMetricSample);
   }
 
   // ------------------------------------------------------------ settings

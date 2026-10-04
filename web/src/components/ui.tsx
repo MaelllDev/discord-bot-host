@@ -361,13 +361,26 @@ const METER_TONES = {
 
 type MeterTone = keyof typeof METER_TONES;
 
-export function ProgressBar({ percent, tone = "indigo" }: { percent: number; tone?: MeterTone }) {
-  const clamped = Math.max(0, Math.min(100, percent));
+export function ProgressBar({
+  percent,
+  tone = "indigo",
+  indeterminate = false,
+}: {
+  percent?: number;
+  tone?: MeterTone;
+  /** Sem progresso conhecido (ex.: download por URL): barra animada genérica. */
+  indeterminate?: boolean;
+}) {
+  const clamped = Math.max(0, Math.min(100, percent ?? 0));
   return (
     <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/[0.07]">
       <div
-        className={cn("h-full rounded-full transition-all duration-300", METER_TONES[tone])}
-        style={{ width: `${clamped}%` }}
+        className={cn(
+          "h-full rounded-full transition-all duration-300",
+          METER_TONES[tone],
+          indeterminate ? "w-1/3 animate-pulse" : "",
+        )}
+        style={indeterminate ? undefined : { width: `${clamped}%` }}
       />
     </div>
   );

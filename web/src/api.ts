@@ -14,8 +14,10 @@ import type {
   EnvVar,
   FileContent,
   FileListing,
+  MetricSample,
   ReleaseRecord,
   SystemInfo,
+  TunnelView,
   UploadResult,
 } from "./types.ts";
 
@@ -247,6 +249,15 @@ export const api = {
       method: "POST",
       body: { includeData },
     }),
+  restoreBackup: (slug: string, id: number) =>
+    request<{ deploymentId: number; releaseSeq: number }>(
+      `/api/apps/${encodeURIComponent(slug)}/backups/${id}/restore`,
+      { method: "POST" },
+    ),
+  metrics: (slug: string) =>
+    request<{ samples: MetricSample[] }>(`/api/apps/${encodeURIComponent(slug)}/metrics`),
+  uploadFromUrl: (url: string) =>
+    request<UploadResult>("/api/uploads/from-url", { method: "POST", body: { url } }),
   deleteBackup: (slug: string, id: number) =>
     request<{ ok: boolean }>(`/api/apps/${encodeURIComponent(slug)}/backups/${id}`, { method: "DELETE" }),
   backupDownloadUrl: (slug: string, id: number) =>
@@ -400,4 +411,18 @@ export const api = {
   },
   downloadUrl: (slug: string, root: "code" | "data", path: string) =>
     `/api/apps/${encodeURIComponent(slug)}/files/download?root=${root}&path=${encodeURIComponent(path)}`,
+
+  /**
+   * Integração do Cloudflare Tunnel. O token só viaja de ida (no `PUT`):
+   * nenhuma resposta daqui o devolve — a tela mostra apenas a dica mascarada.
+   */
+  cloudflare: () => request<{ tunnel: TunnelView }>("/api/cloudflare"),
+  cloudflareLogs: (lines = 120) => request<{ lines: string[] }>(`/api/cloudflare/logs?lines=${lines}`),
+  saveCloudflare: (payload: { token?: string; enabled?: boolean }) =>
+    request<{ tunnel: TunnelView }>("/api/cloudflare", { method: "PUT", body: payload }),
+  cloudflareConnect: () => request<{ tunnel: TunnelView }>("/api/cloudflare/connect", { method: "POST" }),
+  cloudflareDisconnect: () => request<{ tunnel: TunnelView }>("/api/cloudflare/disconnect", { method: "POST" }),
+  cloudflareRestart: () => request<{ tunnel: TunnelView }>("/api/cloudflare/restart", { method: "POST" }),
+  cloudflareTest: () => request<{ tunnel: TunnelView }>("/api/cloudflare/test", { method: "POST" }),
+  removeCloudflare: () => request<{ tunnel: TunnelView }>("/api/cloudflare", { method: "DELETE" }),
 };

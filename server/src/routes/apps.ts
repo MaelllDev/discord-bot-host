@@ -135,6 +135,26 @@ export function registerAppRoutes(server: FastifyInstance, context: AppContext):
     return { ok: true };
   });
 
+  /**
+   * Restaura um backup: o código salvo volta como um novo release, passando
+   * pelo mesmo deploy de um upload (instalação de dependências inclusa).
+   */
+  server.post("/api/apps/:slug/backups/:id/restore", async (request, reply) => {
+    const slug = slugOf(request);
+    const id = parseIntParam((request.params as { id: string }).id, 0);
+    const result = await context.restore.restore(slug, id);
+    reply.code(202);
+    return { deploymentId: result.deploymentId, releaseSeq: result.releaseSeq };
+  });
+
+  // -------------------------------------------------------------- métricas
+
+  /** Histórico de CPU/RAM (~24 h) que alimenta o gráfico da aplicação. */
+  server.get("/api/apps/:slug/metrics", async (request) => {
+    const samples = context.metrics.history(slugOf(request));
+    return { samples };
+  });
+
   // ---------------------------------------------------------- deployments
 
   server.get("/api/apps/:slug/deployments", async (request) => {
@@ -211,5 +231,35 @@ export function registerAppRoutes(server: FastifyInstance, context: AppContext):
   server.delete("/api/uploads/:id", async (request) => {
     await context.uploads.discard((request.params as { id: string }).id);
     return { ok: true };
+  });
+
+  /**
+   * Deploy por URL: baixa o pacote de um endereço http(s) e o registra como um
+   * upload comum. A detecção de runtime volta igual à do upload manual, então
+   * a interface segue o mesmo fluxo de sempre.
+   */
+  server.post("/api/uploads/from-url", async (request, reply) => {
+    const body = parseInput(
+      z.object({ url: z.string().trim().min(1).max(2048) }),
+      request.body,
+    );
+    const record = await context.urlFetch.fetchToUpload(body.url);
+    try {
+      const inspection = await context.uploads.inspect(record.id);
+      reply.code(201);
+      return {
+        upload: {
+          id: inspection.id,
+          fileName: inspection.fileName,
+          sizeBytes: inspection.sizeBytes,
+          fileCount: inspection.fileCount,
+        },
+        detection: inspection.detection,
+      };
+    } catch (error) {
+      // Pacote baixado não abre? Não deixa lixo ocupando o disco até expirar.
+      await context.uploads.discard(record.id);
+      throw error;
+    }
   });
 }

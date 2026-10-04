@@ -573,8 +573,35 @@ describe("upload e deploy", () => {
     expect(json.upload.fileCount).toBe(2);
   });
 
-  it("recusa arquivo que não é ZIP", async () => {
-    const body = multipartBody({ field: "file", filename: "bot.tar.gz", content: Buffer.from("nao é zip") });
+  it("recusa arquivo que não é um pacote suportado", async () => {
+    const body = multipartBody({ field: "file", filename: "bot.bin", content: Buffer.from("nao é pacote") });
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/uploads",
+      headers: { ...auth(), ...body.headers },
+      payload: body.payload,
+    });
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toContain(".tar.gz");
+  });
+
+  it("recusa pacote corrompido com 400 e não 500", async () => {
+    const body = multipartBody({
+      field: "file",
+      filename: "bot.tar.gz",
+      content: Buffer.from("isto não é um tar.gz de verdade"),
+    });
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/uploads",
+      headers: { ...auth(), ...body.headers },
+      payload: body.payload,
+    });
+    expect(response.statusCode).toBe(400);
+  });
+
+  it("recusa um .7z corrompido com 400 e não 500", async () => {
+    const body = multipartBody({ field: "file", filename: "bot.7z", content: Buffer.from("nao é 7z") });
     const response = await server.inject({
       method: "POST",
       url: "/api/uploads",
@@ -627,5 +654,218 @@ describe("upload e deploy", () => {
     // O release não foi ativado, então a aplicação continua sem versão publicada.
     const app = await server.inject({ method: "GET", url: `/api/apps/${slug}`, headers: auth() });
     expect(app.json().app.activeRelease).toBe(0);
+  });
+});
+
+describe("métricas, restauração e deploy por URL", () => {
+  /** Cria um release no disco sem passar pelo Docker (amostragem precisa dele). */
+  async function seedRelease(slug: string): Promise<void> {
+    const release = path.join(workDir, "apps", slug, "releases", "1");
+    await fs.mkdir(release, { recursive: true });
+    await fs.writeFile(path.join(release, "index.js"), "console.log('oi');");
+    // A tabela `releases` também precisa do registro: é dela que sai o número
+    // do próximo release (nextReleaseSeq), igual a um deploy real.
+    context.store.insertRelease({
+      appId: context.apps.mustGet(slug).id,
+      seq: 1,
+      dir: release,
+      image: "node:22-slim",
+      entry: "index.js",
+      startCommand: "node index.js",
+      installCommand: "",
+      notes: "",
+      sizeBytes: 0,
+      createdAt: new Date().toISOString(),
+    });
+    context.store.updateApp(context.apps.mustGet(slug).id, { activeRelease: 1 });
+  }
+
+  it("guarda e lista amostras de métricas por aplicação", async () => {
+    const slug = await createApp();
+    await seedRelease(slug);
+    const appId = context.apps.mustGet(slug).id;
+
+    // Sem amostras ainda: lista vazia, não erro.
+    const empty = await server.inject({ method: "GET", url: `/api/apps/${slug}/metrics`, headers: auth() });
+    expect(empty.statusCode).toBe(200);
+    expect(empty.json().samples).toEqual([]);
+
+    // Duas rodadas diretas do serviço (sem esperar o intervalo de 60 s).
+    await context.metrics.sampleOnce();
+    await context.metrics.sampleOnce();
+
+    const history = await server.inject({ method: "GET", url: `/api/apps/${slug}/metrics`, headers: auth() });
+    expect(history.statusCode).toBe(200);
+    const samples = history.json().samples as { status: string; cpuPercent: number }[];
+    // Docker indisponível nos testes de API: `resources()` volta null e nenhuma
+    // amostra é guardada — o importante é não quebrar a rodada.
+    expect(Array.isArray(samples)).toBe(true);
+
+    // Amostra direta no banco para validar ordenação e forma do registro.
+    context.store.insertMetricSample({
+      appId,
+      ts: new Date().toISOString(),
+      status: "running",
+      cpuPercent: 12.5,
+      memoryBytes: 64 * 1024 * 1024,
+      memoryLimitBytes: 256 * 1024 * 1024,
+      memoryPercent: 25,
+      pids: 5,
+    });
+    const after = await server.inject({ method: "GET", url: `/api/apps/${slug}/metrics`, headers: auth() });
+    const list = after.json().samples as { status: string; cpuPercent: number; memoryPercent: number }[];
+    expect(list).toHaveLength(1);
+    expect(list[0]?.cpuPercent).toBe(12.5);
+    expect(list[0]?.memoryPercent).toBe(25);
+    expect(list[0]?.status).toBe("running");
+  });
+
+  it("restaura um backup como novo release", async () => {
+    const slug = await createApp();
+    await seedRelease(slug);
+
+    const created = await server.inject({
+      method: "POST",
+      url: `/api/apps/${slug}/backups`,
+      headers: auth(),
+      payload: { includeData: false },
+    });
+    expect(created.statusCode).toBe(202);
+    const backupId = created.json().backup.id as number;
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const poll = await server.inject({ method: "GET", url: `/api/apps/${slug}/backups`, headers: auth() });
+      const backup = (poll.json().backups as { id: number; status: string }[]).find((item) => item.id === backupId);
+      if (backup && backup.status !== "running") {
+        expect(backup.status).toBe("success");
+        break;
+      }
+    }
+
+    const restore = await server.inject({
+      method: "POST",
+      url: `/api/apps/${slug}/backups/${backupId}/restore`,
+      headers: auth(),
+    });
+    expect(restore.statusCode).toBe(202);
+    expect(restore.json().releaseSeq).toBe(2);
+    const deploymentId = restore.json().deploymentId as number;
+
+    // Sem Docker, a instalação falha — mas o fluxo de restauração em si
+    // (extração do ZIP de backup, reempacotamento do code/, novo deployment)
+    // aconteceu; o release 2 não pode ter ficado ativo.
+    let status = "running";
+    for (let attempt = 0; attempt < 60 && status === "running"; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      const poll = await server.inject({
+        method: "GET",
+        url: `/api/apps/${slug}/deployments/${deploymentId}`,
+        headers: auth(),
+      });
+      status = poll.json().deployment.status;
+    }
+    expect(["failed", "success"]).toContain(status);
+    // Sem Docker, o deploy falha na criação do container — mas isso acontece
+    // DEPOIS da ativação do release no pipeline (o pacote restaurado era válido:
+    // extração, detecção e publicação passaram). Igual a um upload normal.
+    const app = await server.inject({ method: "GET", url: `/api/apps/${slug}`, headers: auth() });
+    expect(app.json().app.activeRelease).toBe(2);
+
+    // O temporário da restauração não sobrevive ao fim do deploy.
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    const tmpRestores = await fs.readdir(path.join(workDir, "tmp"));
+    expect(tmpRestores.filter((entry) => entry.startsWith("restore-"))).toEqual([]);
+  });
+
+  it("recusa restaurar backup sem código (só /data)", async () => {
+    const slug = await createApp();
+    const shared = path.join(workDir, "apps", slug, "shared");
+    await fs.mkdir(shared, { recursive: true });
+    await fs.writeFile(path.join(shared, "state.json"), '{"n":1}');
+
+    const created = await server.inject({
+      method: "POST",
+      url: `/api/apps/${slug}/backups`,
+      headers: auth(),
+      payload: { includeData: true },
+    });
+    const backupId = created.json().backup.id as number;
+    for (let attempt = 0; attempt < 120; attempt += 1) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+      const poll = await server.inject({ method: "GET", url: `/api/apps/${slug}/backups`, headers: auth() });
+      const backup = (poll.json().backups as { id: number; status: string }[]).find((item) => item.id === backupId);
+      if (backup && backup.status !== "running") break;
+    }
+
+    const restore = await server.inject({
+      method: "POST",
+      url: `/api/apps/${slug}/backups/${backupId}/restore`,
+      headers: auth(),
+    });
+    expect(restore.statusCode).toBe(400);
+    expect(restore.json().error).toMatch(/não contém o código/);
+  });
+
+  it("baixa um pacote de uma URL http e segue o fluxo normal de upload", async () => {
+    // Servidor http local: sem rede externa nos testes.
+    const http = await import("node:http");
+    const zip = makeZip([{ name: "package.json", content: JSON.stringify({ dependencies: { x: "1" } }) }]);
+    const origin = http.createServer((request, response) => {
+      response.writeHead(200, { "content-type": "application/zip" });
+      response.end(zip);
+    });
+    await new Promise<void>((resolve) => origin.listen(0, "127.0.0.1", resolve));
+    const address = origin.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/uploads/from-url",
+      headers: auth(),
+      payload: { url: `http://127.0.0.1:${port}/pacote.zip` },
+    });
+    origin.close();
+    expect(response.statusCode).toBe(201);
+    expect(response.json().upload.fileName).toBe("pacote.zip");
+    expect(response.json().detection.runtime).toBe("node");
+  });
+
+  it("recusa URL com protocolo perigoso e host privado fora da allowlist", async () => {
+    const file = await server.inject({
+      method: "POST",
+      url: "/api/uploads/from-url",
+      headers: auth(),
+      payload: { url: "file:///etc/passwd" },
+    });
+    expect(file.statusCode).toBe(400);
+
+    const ftp = await server.inject({
+      method: "POST",
+      url: "/api/uploads/from-url",
+      headers: auth(),
+      payload: { url: "ftp://exemplo.com/pacote.zip" },
+    });
+    expect(ftp.statusCode).toBe(400);
+  });
+
+  it("falha com mensagem clara quando a URL responde erro", async () => {
+    const http = await import("node:http");
+    const origin = http.createServer((_request, response) => {
+      response.writeHead(404);
+      response.end("nope");
+    });
+    await new Promise<void>((resolve) => origin.listen(0, "127.0.0.1", resolve));
+    const address = origin.address();
+    const port = typeof address === "object" && address ? address.port : 0;
+
+    const response = await server.inject({
+      method: "POST",
+      url: "/api/uploads/from-url",
+      headers: auth(),
+      payload: { url: `http://127.0.0.1:${port}/sumiu.zip` },
+    });
+    origin.close();
+    expect(response.statusCode).toBe(400);
+    expect(response.json().error).toMatch(/HTTP 404/);
   });
 });

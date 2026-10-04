@@ -75,7 +75,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
 
         proxy_read_timeout 3600s;   # long-lived WebSocket connections
-        client_max_body_size 512m;  # allow large ZIP uploads
+        client_max_body_size 512m;  # allow large package uploads (.zip/.7z/.rar/.tar.gz/.tar.xz)
 
         # note: gzip is fine for HTML/JS; do not buffer the WebSocket
         proxy_buffering off;
@@ -94,6 +94,37 @@ sudo certbot --nginx -d panel.example.com
 
 `client_max_body_size` must be ≥ `BOTPANEL_MAX_UPLOAD_MB`, otherwise uploads die at the proxy with
 `413`.
+
+## Exposing the panel with Cloudflare Tunnel
+
+An alternative to the reverse proxy above: the panel runs the Cloudflare connector itself, so the
+panel is reachable over HTTPS with **no inbound port** on the VPS, no certificate to renew and no
+`80/443` open in the firewall. Details: [cloudflare-tunnel.md](cloudflare-tunnel.md).
+
+```
+Internet ──HTTPS──> Cloudflare edge ──tunnel──> botpanel-cloudflared ──HTTP──> BotPanel 0.0.0.0:8080
+```
+
+1. Create the tunnel in **Cloudflare Zero Trust → Networks → Tunnels** (type *Cloudflared*) and copy
+   its connector token.
+2. In the panel: **Cloudflare Tunnel** → paste the token → *Connect with the panel* on → **Save** →
+   **Connect**.
+3. Add a **Public hostname** to the tunnel: service **HTTP**, URL `host.docker.internal:8080` — the
+   container is created with `--add-host host.docker.internal:host-gateway`, so no host networking is
+   needed for the panel to be reachable.
+4. **Add a Cloudflare Access policy** for that hostname (e-mail OTP, or an IP allowlist).
+
+Notes:
+
+- Leave `BOTPANEL_HOST` at its default (`0.0.0.0`) for this setup: the connector reaches the panel
+  through the Docker gateway address, not through the loopback interface.
+- `BOTPANEL_TRUST_PROXY=1` is still useful so the login throttle and the journal see the real client
+  address behind the tunnel.
+- `BOTPANEL_COOKIE_SECURE=1` works here from the start, because the browser side really is HTTPS.
+- The connector is managed like a service: it comes back with the VPS (`unless-stopped`) while
+  *Connect with the panel* is on, and stays down after **Disconnect**.
+- The tunnel exposes the panel **and nothing else**: your applications keep running locally, with the
+  same isolation as before.
 
 ## Docker hardening on the host
 

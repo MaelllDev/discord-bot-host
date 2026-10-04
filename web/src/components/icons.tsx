@@ -364,6 +364,14 @@ export function IconGlobe(props: IconProps) {
   );
 }
 
+export function IconCloud(props: IconProps) {
+  return (
+    <Icon {...props}>
+      <path d="M7.5 18.5h9.2a3.8 3.8 0 0 0 .4-7.6 5.3 5.3 0 0 0-10.2-1.4A3.9 3.9 0 0 0 7.5 18.5Z" />
+    </Icon>
+  );
+}
+
 export function IconSun(props: IconProps) {
   return (
     <Icon {...props}>

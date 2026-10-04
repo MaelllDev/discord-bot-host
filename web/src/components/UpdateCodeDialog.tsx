@@ -8,6 +8,7 @@ import { IconCheck, IconUpload } from "./icons.tsx";
 import DeploymentLogView from "./DeploymentLogView.tsx";
 import { useToast } from "./Toasts.tsx";
 import { useI18n } from "../i18n/index.tsx";
+import { ARCHIVE_ACCEPT, isArchiveFile } from "../archives.ts";
 
 type Stage = "select" | "uploading" | "ready" | "deploying" | "done";
 
@@ -37,6 +38,8 @@ export default function UpdateCodeDialog({
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState(false);
   const [rejectFile, setRejectFile] = useState<string | null>(null);
+  const [url, setUrl] = useState("");
+  const [fetching, setFetching] = useState(false);
   const dragDepth = useRef(0);
 
   const reset = (): void => {
@@ -51,6 +54,8 @@ export default function UpdateCodeDialog({
     setReleaseSeq(null);
     setError(null);
     setRejectFile(null);
+    setUrl("");
+    setFetching(false);
     dragDepth.current = 0;
     setDragging(false);
     if (fileInputRef.current) fileInputRef.current.value = "";
@@ -66,15 +71,11 @@ export default function UpdateCodeDialog({
   // em "ready"); durante upload/deploy é ignorado para não interromper nada.
   const dropLocked = stage === "uploading" || stage === "deploying" || stage === "done";
 
-  // Aceita o ZIP vindo do input ou do drag & drop; qualquer outro arquivo é
-  // recusado com aviso, sem iniciar upload.
+  // Aceita o pacote (.zip, .7z ou .rar) vindo do input ou do drag & drop;
+  // qualquer outro arquivo é recusado com aviso, sem iniciar upload.
   const acceptFile = (file: File | null | undefined): void => {
     if (!file || dropLocked) return;
-    const isZip =
-      file.name.toLowerCase().endsWith(".zip") ||
-      file.type === "application/zip" ||
-      file.type === "application/x-zip-compressed";
-    if (!isZip) {
+    if (!isArchiveFile(file.name)) {
       setRejectFile(file.name);
       return;
     }
@@ -98,6 +99,29 @@ export default function UpdateCodeDialog({
     } catch (caught) {
       setError(errorText(caught));
       setStage("select");
+    }
+  };
+
+  // Baixa o pacote de uma URL http(s): o backend registra o download como um
+  // upload comum, então daqui para frente o fluxo é o mesmo do arquivo local.
+  const fetchFromUrl = async (): Promise<void> => {
+    const trimmed = url.trim();
+    if (!trimmed || fetching || dropLocked) return;
+    setError(null);
+    setFileName(trimmed.split("/").pop() || trimmed);
+    setFetching(true);
+    setStage("uploading");
+    setPercent(0);
+    try {
+      const result = await api.uploadFromUrl(trimmed);
+      setUploadId(result.upload.id);
+      setDetection(result.detection);
+      setStage("ready");
+    } catch (caught) {
+      setError(errorText(caught));
+      setStage("select");
+    } finally {
+      setFetching(false);
     }
   };
 
@@ -132,7 +156,7 @@ export default function UpdateCodeDialog({
             </Button>
           ) : null}
           {stage === "select" || stage === "uploading" ? (
-            <Button variant="primary" loading={stage === "uploading"} onClick={() => fileInputRef.current?.click()}>
+            <Button variant="primary" loading={stage === "uploading" && !fetching} onClick={() => fileInputRef.current?.click()}>
               {t("update.selectZip")}
             </Button>
           ) : null}
@@ -170,7 +194,7 @@ export default function UpdateCodeDialog({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".zip,application/zip"
+          accept={ARCHIVE_ACCEPT}
           className="hidden"
           onChange={(event) => {
             const file = event.target.files?.[0];
@@ -232,10 +256,24 @@ export default function UpdateCodeDialog({
                 <Spinner className="h-3.5 w-3.5" /> {t("update.uploading", { name: fileName })}
               </span>
               <span className="font-mono">
-                {percent}% ({humanBytes(uploadedBytes)})
+                {fetching ? t("update.url.downloading") : `${percent}% (${humanBytes(uploadedBytes)})`}
               </span>
             </div>
-            <ProgressBar percent={percent} />
+            <ProgressBar percent={fetching ? undefined : percent} indeterminate={fetching} />
+          </div>
+        ) : null}
+
+        {stage === "select" ? (
+          <div className="flex items-center gap-2">
+            <Input
+              value={url}
+              onChange={(event) => setUrl(event.target.value)}
+              placeholder={t("update.url.placeholder")}
+              className="flex-1"
+            />
+            <Button variant="ghost" loading={fetching} disabled={!url.trim()} onClick={() => void fetchFromUrl()}>
+              {t("update.url.action")}
+            </Button>
           </div>
         ) : null}
 

@@ -1,15 +1,16 @@
 # BotPanel
 
 A private, self-hosted control panel for running **many bots and small applications on a single VPS**.
-You upload a ZIP, BotPanel detects the runtime, installs the dependencies, starts the app inside an
-isolated Docker container and gives you logs, a console, a file manager, backups, rollbacks and
-optional AI log analysis — all from one web dashboard.
+You upload the code as a `.zip`, `.7z`, `.rar`, `.tar.gz` or `.tar.xz` file, BotPanel detects the
+runtime, installs the dependencies, starts the app inside an isolated Docker container and gives you
+logs, a console, a file manager, backups, rollbacks and optional AI log analysis — all from one web
+dashboard.
 
 It is designed for **one administrator hosting their own projects** (Discord bots, workers, small
 APIs). It is *not* a multi-tenant hosting business: there are no plans, no customers, no per-user
 permissions.
 
-![Version](https://img.shields.io/badge/version-1.0.5-6366f1)
+![Version](https://img.shields.io/badge/version-1.1.0-6366f1)
 ![License](https://img.shields.io/badge/license-MIT-8b5cf6)
 ![Node](https://img.shields.io/badge/node-%3E%3D22-3c873a)
 ![Platform](https://img.shields.io/badge/platform-Linux%20%2B%20Docker-0db7ed)
@@ -33,6 +34,7 @@ permissions.
 - [Application lifecycle](#application-lifecycle)
 - [Backups](#backups)
 - [AI log analysis](#ai-log-analysis)
+- [Cloudflare Tunnel](#cloudflare-tunnel)
 - [Security](#security)
 - [Production deployment](#production-deployment)
 - [Updating BotPanel](#updating-botpanel)
@@ -50,8 +52,10 @@ permissions.
 
 ### Applications
 
-- **Deploy from a ZIP** — upload the project (or drag-and-drop), the panel extracts it, strips a
-  single top-level folder when present and publishes a new release.
+- **Deploy from a package** — upload the project as `.zip`, `.7z`, `.rar`, `.tar.gz` or `.tar.xz`
+  (or drag-and-drop), the panel extracts it, strips a single top-level folder when present and
+  publishes a new release. `.zip` is extracted in streaming; the other formats are read in memory,
+  so they are limited to 256 MB.
 - **Automatic runtime detection** — Node.js (`package.json`, entry `index.js`/`server.js`/…),
   Python (`requirements.txt`, entry `main.py`/`bot.py`/…), or an explicit "custom command" mode.
 - **Configurable execution** — entry file, dependency file, install command, start command, and an
@@ -77,13 +81,16 @@ permissions.
   clear-view button. Every line is stamped with the run it belongs to, so restarting the container
   clears the screen instead of mixing old and new executions.
 - **Interactive console** — send text to the process `stdin`, with `↑`/`↓` history.
-- **Live metrics** — CPU, memory, PIDs, uptime and status, streamed to the browser.
+- **Live metrics** — CPU, memory, PIDs, uptime and status, streamed to the browser, plus a 24-hour
+  history chart (one sample per minute) to spot memory leaks before the OOM killer does.
 - **File manager** — browse both the *code* (active release) and the *data* (persistent) roots,
   open and edit text files, save, upload, download, create folders, rename and delete.
 - **Backups** — create a ZIP of the code of the active release and, optionally, of `/data`; then
-  download or delete it. Available per application and on a global page.
-- **Code updates** — upload a new ZIP for an existing application; the update replaces the code but
-  never the persistent data. If dependency installation fails, the previous version keeps running.
+  download, delete or **restore it as a new release** (a full deploy, with dependency installation).
+  Available per application and on a global page.
+- **Code updates** — upload a new `.zip`, `.7z`, `.rar`, `.tar.gz` or `.tar.xz` for an existing application — or paste a direct
+  http(s) URL and let the panel download it —; the update replaces the code but never the persistent
+  data. If dependency installation fails, the previous version keeps running.
 - **Immutable releases + rollback** — every deploy creates `releases/N`; you can reactivate any
   previous one. A retention policy controls how many are kept.
 - **Dashboard** — totals, online/stopped/unknown counters, CPU and memory usage, host capacity and a
@@ -92,6 +99,23 @@ permissions.
   effective configuration.
 - **Actions follow the real state** — when the Docker daemon is unreachable the panel reports
   `unknown` instead of pretending the application is stopped.
+- **Notifications** — send to a Discord channel when an application starts, stops, is restarted or
+  crashes. URL, event selection, message identity and a per-event message per webhook, plus a test
+  button. The webhook URL is a credential: it is stored on the server and only ever shown masked.
+
+### Cloudflare Tunnel (expose the panel)
+
+- **Reach the panel without opening a port** — the panel runs `cloudflared` in a container it manages
+  and connects it to a tunnel you created in Cloudflare Zero Trust, so the panel can be reached over
+  HTTPS with no inbound port, no certificate to renew and no reverse proxy.
+- **Managed like a service, not like an application** — the connector is its own container
+  (`botpanel-cloudflared`, `unless-stopped`) with its own labels, so it never shows up in the
+  applications list and is never touched by application cleanup.
+- **Honest status** — "container running" is not reported as "connected": the tunnel state comes from
+  the connector's own log lines, and Docker being down shows as `unknown` instead of a guess.
+- **Token handled as a secret** — stored in the panel database, never returned by the API (only a
+  masked hint), redacted from logs, errors, URLs and container names.
+- **Diagnostics built in** — the last connector lines are shown on demand with the token redacted.
 
 ### AI log analysis (optional, bring your own key)
 
@@ -199,6 +223,11 @@ The installer:
 6. installs, enables and starts the `botpanel` systemd service,
 7. waits for `/api/health` and only then prints the URL and the useful commands.
 
+If you cloned inside a home directory (`/root/discord-bot-host`, `/home/you/…`), the installer
+installs to `/opt/botpanel` instead and says so: the systemd unit hides `/root` and `/home` from the
+service (`ProtectHome=yes`), so a project there could never start. Use `--panel-dir <path>` to pick
+another location — the unit relaxes that directive to `read-only` if the path is inside a home.
+
 It is idempotent: running it again updates an existing installation and keeps your environment file
 and data intact. If the service does not answer `/api/health`, the installer prints the unit status
 and the journal and **exits non-zero** — it never reports an installation that did not happen.
@@ -258,7 +287,7 @@ in [docs/configuration.md](docs/configuration.md).
 | `BOTPANEL_TRUST_PROXY` | `0` | Set to `1` behind a reverse proxy |
 | `BOTPANEL_DATA_DIR` | `/var/lib/botpanel` | Database, releases and `/data` volumes |
 | `BOTPANEL_DOCKER_SOCKET` | `/var/run/docker.sock` | Docker daemon socket |
-| `BOTPANEL_MAX_UPLOAD_MB` | `512` | Maximum ZIP upload size |
+| `BOTPANEL_MAX_UPLOAD_MB` | `512` | Maximum package (`.zip`, `.7z`, `.rar`, `.tar.gz`, `.tar.xz`) upload size |
 | `BOTPANEL_KEEP_RELEASES` | `10` | Releases kept per application (`0` = all) |
 | `BOTPANEL_RUN_UID` / `_GID` | `1000` | UID/GID used inside containers |
 | `BOTPANEL_ALLOWED_IMAGES` | *(any)* | Comma-separated whitelist of Docker images |
@@ -281,7 +310,8 @@ the login screen instead of leaving the interface in a broken state.
 ## Creating an application
 
 1. **New application** in the sidebar.
-2. **Upload the ZIP** of your project (it does not need a build step: the panel runs your source).
+2. **Upload the package** (`.zip`, `.7z`, `.rar`, `.tar.gz` or `.tar.xz`) of your project (it does not need a build step:
+   the panel runs your source).
 3. The panel **detects the runtime** and shows it — adjust if needed:
    - **Node.js**: `node:22-slim`, install `npm ci`/`npm install`, start `node <entry>`.
    - **Python**: `python:3.12-slim`, install `pip install --requirement requirements.txt`, start
@@ -294,7 +324,7 @@ the login screen instead of leaving the interface in a broken state.
 7. **Review** the summary and create the application. The first release is deployed automatically
    and you are redirected to its page.
 
-Every step shows real progress (`Sending ZIP…`, `Extracting…`, `Installing dependencies…`,
+Every step shows real progress (`Sending package…`, `Extracting…`, `Installing dependencies…`,
 `Creating container…`, `Starting…`) from the deployment log the backend produces.
 
 ## Application lifecycle
@@ -304,7 +334,7 @@ Every step shows real progress (`Sending ZIP…`, `Extracting…`, `Installing d
 | **Start** | The container is started (and recreated if it disappeared). The state is left "running" by you, so automations apply again |
 | **Stop** | Graceful stop (SIGTERM, then kill after 10 s). The panel records that *you* stopped it, so no automation resurrects it |
 | **Restart** | Container restarted, keeping the active release |
-| **Update code** | Upload a new ZIP → new immutable release → dependencies installed inside it → container recreated with the new code. `/data` is untouched. If the install fails, the previous release keeps running |
+| **Update code** | Upload a new `.zip`, `.7z`, `.rar`, `.tar.gz` or `.tar.xz` → new immutable release → dependencies installed inside it → container recreated with the new code. `/data` is untouched. If the install fails, the previous release keeps running |
 | **Rollback** | Activate an older release; the container is recreated with that code, `/data` preserved |
 | **Delete** | Confirmation dialog. Optionally deletes the files on disk. The application, its containers, network and metadata are removed; Docker **images are deliberately kept** (they are shared and expensive to pull) |
 
@@ -342,6 +372,35 @@ terms apply to whatever is sent.
 
 Details: [docs/ai-analysis.md](docs/ai-analysis.md).
 
+## Cloudflare Tunnel
+
+Exposes the panel itself over HTTPS through Cloudflare Zero Trust, without opening a port on the VPS.
+Full guide: [docs/cloudflare-tunnel.md](docs/cloudflare-tunnel.md).
+
+Create the tunnel in **Cloudflare Zero Trust → Networks → Tunnels** (type *Cloudflared*), copy the
+**token** shown on the connector screen (ignore the `docker run` command — the panel runs that
+container for you), then:
+
+1. **Cloudflare Tunnel** page → paste the token → keep *Connect with the panel* on → **Save**.
+2. **Connect**. The panel pulls the image, creates `botpanel-cloudflared` and waits for the state.
+3. In the dashboard, add a **Public hostname** to the tunnel: service **HTTP**, URL
+   `host.docker.internal:8080`.
+4. **Add a Cloudflare Access policy** for that hostname. Without one the panel is exposed to the
+   internet and its password becomes the only barrier.
+
+| Detail | Value |
+|---|---|
+| Container | `botpanel-cloudflared` — `cloudflare/cloudflared:latest`, `unless-stopped` |
+| Ports | none (the connector is outbound-only) |
+| Tunnel target | `http://host.docker.internal:8080` (no host networking needed) |
+| Token storage | panel database (`settings`); never returned by the API |
+| Token in logs | always redacted, including the **Diagnostics** panel |
+| Status accuracy | *Connected* requires a registered connection in the connector logs — a running container is not enough |
+
+Tunnels created with `cloudflared tunnel create` on the VPS use a `credentials.json` and are **not**
+supported by this version — the integration runs a token-managed tunnel. Creating tunnels and DNS
+records from the panel (Cloudflare API) is the next step, not part of this version.
+
 ## Security
 
 Honest summary of what is implemented — see [docs/security.md](docs/security.md):
@@ -355,13 +414,16 @@ Honest summary of what is implemented — see [docs/security.md](docs/security.m
 - **Path safety**: uploads are protected against zip-slip, the file manager is confined to the
   release and `/data` roots and rejects traversal, and the API never exposes files outside them.
 - **Secrets**: environment variable values marked secret are masked in the UI; the AI key is stored
-  server-side and never returned by the API (`apiKeySet` + a masked hint only).
+  server-side and never returned by the API (`apiKeySet` + a masked hint only). The Cloudflare tunnel
+  token follows the same rule (`tokenSet` + masked hint) and is redacted from every log line the
+  panel displays.
 
 What it is **not**: BotPanel is not a sandbox against a malicious *container image* you deliberately
 choose, it does not encrypt the database at rest, the panel itself runs as **root** (needed to talk
 to the Docker socket and to chown application files), and HTTP is not encrypted unless you put a TLS
 reverse proxy in front. Treat the panel as an administrative interface for a machine you own: keep
-it private.
+it private. If you do expose it with Cloudflare Tunnel, put a **Cloudflare Access** policy in front
+of the hostname — the tunnel removes the port, not the need for a second barrier.
 
 ## Production deployment
 
@@ -382,24 +444,34 @@ Recommendations (full guide: [docs/deployment.md](docs/deployment.md)):
 
 ## Updating BotPanel
 
+One command, no need to remember how it was installed:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MaelllDev/discord-bot-host/main/scripts/update.sh | sudo bash
+```
+
+It reads the systemd unit to find the installation, brings the code to the newest release (git when
+the directory is a clone, otherwise the release tarball), rebuilds through `scripts/install.sh` and
+waits for `/api/health`. If the new build does not come up, the previous build is put back and the
+service restarted, so a bad update never leaves you with a dead panel. Data, releases, backups and
+your password are never touched. Useful flags: `--check` (report the installed and available version,
+change nothing) and `--ref v1.0.7` (pin a specific tag or branch).
+
+```bash
+# what is installed, and what is available?
+curl -fsSL .../scripts/update.sh | sudo bash -s -- --check
+```
+
+The manual path still works — `scripts/install.sh` is idempotent, so the update is the same as the
+installation:
+
 ```bash
 cd /opt/botpanel
 git pull                       # or re-copy the new source over this directory
 sudo bash scripts/install.sh   # rebuilds and restarts; keeps .env and data
 ```
 
-`scripts/install.sh` is idempotent, so the update path is the same as the installation path. Your
-applications keep running during the rebuild; the service restart is a couple of seconds.
-
-For a one-command update — it finds the panel through its systemd unit, pulls the newest release,
-rebuilds and restarts, and rolls back to the previous build if the new one does not come up:
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/MaelllDev/discord-bot-host/main/scripts/update.sh | sudo bash
-```
-
-`--check` only reports the installed and available versions. See
-[docs/installation.md](docs/installation.md#updating-an-existing-installation).
+Your applications keep running during the rebuild; the service restart is a couple of seconds.
 
 The panel's own version appears in the **System** page and comes from `server/package.json`, which
 is kept in sync by the release script (see [docs/releasing.md](docs/releasing.md)).
@@ -415,9 +487,13 @@ Full list with commands: [docs/troubleshooting.md](docs/troubleshooting.md).
 | Port already in use | `ss -ltnp \| grep 8080`, then change `BOTPANEL_PORT` |
 | Application goes to *Crashed* | Open its **Logs** tab; exit code 137 means it was killed (OOM or a stop signal) |
 | Dependency install fails | The deployment log shows the real command and error; check the entry/dependency file names |
-| Python module missing | `requirements.txt` must exist in the ZIP (the panel installs it into the release) |
+| Python module missing | `requirements.txt` must exist in the uploaded package (the panel installs it into the release) |
+| `.7z`/`.rar`/`.tar.gz`/`.tar.xz` upload rejected | These formats are read in memory and capped at 256 MB; re-zip larger projects as `.zip` |
+| Password-protected package rejected | Encrypted archives (`.zip`, `.7z`, `.rar`) are not supported; upload an unencrypted one |
 | WebSocket keeps reconnecting | A proxy in front of the panel must forward `Upgrade`/`Connection` headers |
 | AI returns "model does not exist" | **Settings → AI log analysis → find models** and pick a model from that list |
+| Cloudflare Tunnel stuck in *No connection* / *Error* | Press **Test connection**, then **Diagnostics** for the connector's own message; `docker logs botpanel-cloudflared` shows the same |
+| Tunnel page says *Container name taken* | A container named `botpanel-cloudflared` exists without the panel's labels; the panel refuses to touch it — rename or remove it yourself |
 
 ## Development
 
@@ -457,16 +533,31 @@ bash scripts/tests/release.test.sh   # release source synchronisation (no Docker
   immediately with a clear message and touches nothing, that `--no-service` builds the project but
   never claims a production installation, that a service which never becomes healthy exits non-zero
   with the diagnostics, and that the normal healthy path still prints the URL.
+- **Updater tests** (`scripts/tests/update.test.sh`): `scripts/update.sh` runs in the same kind of
+  container with a `curl` stub standing in for the GitHub API, the release tarball and the health
+  endpoint. They prove the updater finds the installation from the unit file, installs the new code
+  and rebuilds it, never touches the data directory or the environment file, refuses a git
+  installation with local changes, uses the newest tag when there is no published release, and puts
+  the previous build back when the new one does not answer `/api/health`.
 - **Release workflow tests** (`scripts/tests/release.test.sh`): the maintainer release script is the
   only thing that copies source into this repository, so the copy is tested against a fake project and
   a throwaway git repository: new and changed files really move, files dropped by the source disappear
   from the repository, `--sync-only` leaves the version and the changelog untouched, and `--dry-run`
   writes nothing.
+- **Cloudflare Tunnel tests** (`server/tests/cloudflare.test.ts`) run the integration against a fake
+  Docker daemon (creation, image pull, start/stop/restart, boot reconciliation, non-duplication, the
+  `unless-stopped` policy, the instance labels, every error code and the redaction of the token),
+  plus the HTTP contract of the routes (session required, token never returned, token preserved when
+  the body omits it, token rejected through the query string).
 - **Docker E2E** (`BOTPANEL_E2E=1`): a temporary panel instance validates, against the real daemon,
   container creation, real `npm install`/`pip install`, boot, RAM/CPU/PID limits (including a real
   OOM kill and automatic restart), isolation of files/processes/network between applications,
   real-time logs, stdin console, `/data` persistence, update, rollback, the two automation switches,
   instance independence and cleanup. Add `BOTPANEL_E2E_DOCKER_RESTART=1` to also restart the daemon.
+  The same command also runs `server/tests/e2e.cloudflare.test.ts`, which creates the real
+  `botpanel-cloudflared` container with a **fake token**, asserts the labels, the restart policy and
+  the absence of published ports, and removes everything afterwards — the suite skips itself when a
+  connector from another installation is already present.
 
 ## Project structure
 
@@ -480,6 +571,7 @@ bash scripts/tests/release.test.sh   # release source synchronisation (no Docker
 │   │   ├── db.ts               # SQLite schema, migrations, queries
 │   │   ├── auth.ts             # password check, session cookie, throttling
 │   │   ├── apps/               # domain: detection, container spec, deploy, files, backups
+│   │   ├── cloudflare/         # Cloudflare Tunnel integration (config + managed cloudflared container)
 │   │   ├── docker/             # Docker client wrapper, log parsing, templates
 │   │   ├── routes/             # REST API
 │   │   ├── ai/                 # providers, prompt building, redaction, analyses
@@ -487,7 +579,7 @@ bash scripts/tests/release.test.sh   # release source synchronisation (no Docker
 │   └── tests/                  # unit, integration and Docker E2E tests
 ├── web/                        # frontend (React + Vite + Tailwind)
 │   ├── src/
-│   │   ├── pages/              # Dashboard, Apps, AppDetail, NewApp, Backups, System, Settings, Login
+│   │   ├── pages/              # Dashboard, Apps, AppDetail, NewApp, Backups, System, Cloudflare, Settings, Login
 │   │   ├── components/         # layout, cards, panels, dialogs, toasts, error boundary
 │   │   ├── api.ts              # typed API client
 │   │   └── hooks.ts            # data loading + WebSocket stream hooks
@@ -520,6 +612,7 @@ bash scripts/tests/release.test.sh   # release source synchronisation (no Docker
 - [Security](docs/security.md)
 - [Backups](docs/backups.md)
 - [AI log analysis](docs/ai-analysis.md)
+- [Cloudflare Tunnel](docs/cloudflare-tunnel.md)
 - [Development](docs/development.md)
 - [Publishing a release](docs/releasing.md)
 - [Changelog](CHANGELOG.md)

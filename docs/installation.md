@@ -261,7 +261,7 @@ Then open `http://<your-server-ip>:8080` and log in.
 | `/var/lib/botpanel/.session-secret` | generated cookie secret (mode `0600`) |
 | `/var/lib/botpanel/apps/<slug>/releases/N` | immutable code of each release |
 | `/var/lib/botpanel/apps/<slug>/shared` | the `/data` volume of the application |
-| `/var/lib/botpanel/tmp/uploads` | uploaded ZIPs (pruned automatically) |
+| `/var/lib/botpanel/tmp/uploads` | uploaded packages `.zip`/`.7z`/`.rar`/`.tar.gz`/`.tar.xz` (pruned automatically) |
 
 ## Uninstalling
 

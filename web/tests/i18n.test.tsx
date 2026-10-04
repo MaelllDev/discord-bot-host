@@ -55,6 +55,10 @@ describe("camada de tradução", () => {
       ...["node", "python", "custom"].map((runtime) => `runtime.${runtime}`),
       ...["success", "failed", "running", "pending"].map((status) => `deploy.status.${status}`),
       ...["start", "stop", "restart"].map((action) => `actions.${action}.done`),
+      // Estados do Cloudflare Tunnel: montados em template literal na página.
+      ...["not_configured", "stopped", "starting", "connected", "disconnected", "error", "unknown"].map(
+        (state) => `cloudflare.status.${state}`,
+      ),
     ];
 
     for (const file of sourceFiles()) {

@@ -163,7 +163,7 @@ describe("página de Dashboard", () => {
 
     expect(text).toContain("Primeiros passos");
     expect(text).toContain("Hospede seus bots e aplicações nesta VPS");
-    expect(text).toContain("Deploy por ZIP");
+    expect(text).toContain("Deploy por pacote");
     expect(text).toContain("Versões e rollback");
     expect(text).toContain("Criar a primeira aplicação");
   });

@@ -119,7 +119,7 @@ export async function detectProject(root: string): Promise<ProjectDetection> {
     };
   }
 
-  notes.push("Nenhum projeto Node.js ou Python reconhecido na raiz do ZIP; revise as configurações.");
+  notes.push("Nenhum projeto Node.js ou Python reconhecido na raiz do pacote; revise as configurações.");
   return {
     runtime: "custom",
     entry: "",

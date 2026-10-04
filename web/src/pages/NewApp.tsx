@@ -13,6 +13,7 @@ import {
   translateIssues,
 } from "../validation.ts";
 import type { ValidationIssue } from "../validation.ts";
+import { ARCHIVE_ACCEPT, isArchiveFile, stripArchiveExtension } from "../archives.ts";
 import EnvEditor from "../components/EnvEditor.tsx";
 import ImageUpload from "../components/ImageUpload.tsx";
 import AppIcon from "../components/AppIcon.tsx";
@@ -146,6 +147,11 @@ export default function NewApp() {
     allIssues.filter((item) => item.step === index).map((item) => item.text);
 
   const handleFile = async (file: File): Promise<void> => {
+    // Falha rápido, com mensagem clara, para pacotes que o backend recusaria.
+    if (!isArchiveFile(file.name)) {
+      setUploadError(t("newApp.drop.reject", { name: file.name }));
+      return;
+    }
     setUploading(true);
     setUploadError(null);
     setUploadPercent(0);
@@ -168,8 +174,7 @@ export default function NewApp() {
 
       if (name.trim().length === 0) {
         setName(
-          file.name
-            .replace(/\.zip$/i, "")
+          stripArchiveExtension(file.name)
             .replace(/[-_]+/g, " ")
             .trim()
             .slice(0, 48),
@@ -352,7 +357,7 @@ export default function NewApp() {
             <input
               ref={fileInputRef}
               type="file"
-              accept=".zip,application/zip"
+              accept={ARCHIVE_ACCEPT}
               className="hidden"
               onChange={(event) => {
                 const file = event.target.files?.[0];

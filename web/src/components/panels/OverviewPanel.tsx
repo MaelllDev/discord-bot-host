@@ -13,6 +13,7 @@ import {
   runtimeLabel,
 } from "../../format.ts";
 import { Alert, Badge, Button, Card, DescriptionList, InlineCode, Kpi, Meter, Spinner } from "../ui.tsx";
+import MetricsChart from "../MetricsChart.tsx";
 
 /**
  * Conteúdo informativo da aba Visão geral. A identidade (foto, nome, estado)
@@ -138,6 +139,13 @@ export default function OverviewPanel({
             </Alert>
           ) : null}
         </div>
+      </Card>
+
+      <Card
+        title={t("metrics.history.title")}
+        subtitle={t("metrics.history.subtitle")}
+      >
+        <MetricsChart slug={app.slug} refreshKey={app.updatedAt ? 1 : 0} />
       </Card>
 
       <div className="grid gap-4 lg:grid-cols-2">

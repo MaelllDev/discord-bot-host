@@ -12,6 +12,7 @@ import Backups from "./pages/Backups.tsx";
 import NewApp from "./pages/NewApp.tsx";
 import AppDetail from "./pages/AppDetail.tsx";
 import SystemPage from "./pages/System.tsx";
+import CloudflarePage from "./pages/Cloudflare.tsx";
 import Settings from "./pages/Settings.tsx";
 
 type SessionState = "loading" | "authenticated" | "anonymous";
@@ -74,6 +75,7 @@ export default function App() {
             { path: "backups", element: <Backups /> },
             { path: "apps/:slug", element: <AppDetailRoute /> },
             { path: "system", element: <SystemPage /> },
+            { path: "cloudflare", element: <CloudflarePage /> },
             { path: "settings", element: <Settings onLogout={() => void handleLogout()} /> },
             { path: "*", element: <Navigate to="/" replace /> },
           ],

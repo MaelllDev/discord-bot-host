@@ -13,7 +13,11 @@ import { FileService } from "./apps/files.ts";
 import { UploadStore } from "./apps/uploads.ts";
 import { ImageStore } from "./apps/images.ts";
 import { BackupService } from "./apps/backups.ts";
+import { MetricsService, startMetricsSampler } from "./apps/metrics.ts";
+import { RestoreService } from "./apps/restore.ts";
+import { UrlFetchService } from "./apps/fetchurl.ts";
 import { AiService } from "./ai/service.ts";
+import { CloudflareService } from "./cloudflare/service.ts";
 import { NotifyService, startStatusWatcher } from "./notify/webhooks.ts";
 import {
   LoginThrottle,
@@ -67,6 +71,10 @@ export async function buildServer(config: PanelConfig, logger?: FastifyServerOpt
   const backups = new BackupService(config, store);
   const ai = new AiService(store);
   const notify = new NotifyService(store, () => config.panelName);
+  const cloudflare = new CloudflareService(store, docker);
+  const metrics = new MetricsService(store, docker);
+  const restore = new RestoreService(config, apps, backups);
+  const urlFetch = new UrlFetchService(config, uploads);
   await uploads.init();
   await images.init();
   // Um backup interrompido por um restart ficaria marcado como "em execução"
@@ -86,6 +94,10 @@ export async function buildServer(config: PanelConfig, logger?: FastifyServerOpt
     uploads,
     images,
     notify,
+    cloudflare,
+    metrics,
+    restore,
+    urlFetch,
     // O hash de uma senha redefinida no painel vive no banco e tem prioridade
     // sobre a senha inicial gerada no primeiro boot.
     password: resolvePasswordSource(config, store.getSetting(PASSWORD_HASH_SETTING)),
@@ -134,6 +146,12 @@ export async function buildServer(config: PanelConfig, logger?: FastifyServerOpt
 
   // Observador de status: crash/recuperação sem ninguém com a página aberta.
   startStatusWatcher(context);
+  // Histórico de métricas: uma amostra por minuto para o gráfico de 24 h.
+  startMetricsSampler(context);
+  // Túnel: se estiver configurado E habilitado, realinha o container no boot.
+  // Deliberadamente fora do caminho crítico (a página não espera o Docker) e
+  // nunca ressuscita um túnel que o usuário desconectou.
+  void context.cloudflare.reconcileOnStartup();
   // Ações manuais (start/stop/restart) avisam por conta própria, com o tipo
   // exato, e marcam intenção para o observador não duplicar o aviso.
   apps.onLifecycle = (kind, app) => void context.notify.dispatch(kind, app);
