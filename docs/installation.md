@@ -131,9 +131,50 @@ set -a; . /etc/botpanel.env; set +a
 NODE_ENV=production node /opt/botpanel/server/dist/index.js
 ```
 
+### Where the installer puts the project
+
+The default `--panel-dir` is the directory you cloned into — **unless** that directory is inside a
+home directory (`/root`, `/home/<user>`). The systemd unit hardens the service with
+`ProtectHome=yes`, which makes those paths invisible to it, so a project installed there would fail
+at every boot with `Changing to the requested working directory failed` (`status=200/CHDIR`).
+Cloning as root, or as your own user, lands exactly there, so in that case the installer logs a
+warning and installs to `/opt/botpanel` instead. Pass `--panel-dir <path>` to choose another
+directory; if that directory is inside a home directory, the generated unit switches `ProtectHome` to
+`read-only` (the project stays readable, nothing there becomes writable).
+
+### Updating an existing installation
+
+The updater does the whole job with one command — it finds the installation in the systemd unit, so
+it does not matter which `--panel-dir` was used originally:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MaelllDev/discord-bot-host/main/scripts/update.sh | sudo bash
+```
+
+What it does, in order: reads the unit to locate the panel, brings the code to the newest published
+release (`git fetch` + `checkout` for a clone, the GitHub release tarball otherwise), rebuilds through
+`scripts/install.sh`, and waits for `/api/health`. When the new build does not answer, the previous
+build is restored and the service restarted with it, so a broken release cannot leave the panel down.
+
+| Flag | What it is for |
+|---|---|
+| `--check` | Report the installed and the available version; nothing is downloaded, built or restarted (safe in cron) |
+| `--ref <tag\|branch>` | Update to a specific tag or branch instead of the newest release |
+| `--panel-dir <path>` | Override where the panel is installed |
+| `--force` | Discard local changes in a git installation instead of stopping |
+
+```bash
+# check from a script or a cron job
+curl -fsSL .../scripts/update.sh | sudo bash -s -- --check
+sudo bash scripts/update.sh --ref v1.0.7        # from a local clone
+```
+
+The data directory (`/var/lib/botpanel`) and `/etc/botpanel.env` are never touched: applications,
+releases, backups and the password stay exactly as they are.
+
 ### Re-running the installer
 
-`scripts/install.sh` is **idempotent** and is the supported update path:
+`scripts/install.sh` is **idempotent** and remains the supported update path (the updater calls it):
 
 ```bash
 cd /opt/botpanel && sudo bash scripts/install.sh
@@ -174,6 +215,7 @@ sudo sed -e 's|@PANEL_DIR@|/opt/botpanel|g' \
          -e 's|@ENV_FILE@|/etc/botpanel.env|g' \
          -e "s|@NODE_BIN@|$(command -v node)|g" \
          -e 's|@SERVICE_USER@|root|g' \
+         -e 's|@PROTECT_HOME@|yes|g' \
          deploy/botpanel.service | sudo tee /etc/systemd/system/botpanel.service
 sudo systemctl daemon-reload
 sudo systemctl enable --now botpanel
@@ -211,7 +253,7 @@ Then open `http://<your-server-ip>:8080` and log in.
 
 | Path | Content |
 |---|---|
-| `/opt/botpanel` | source and build (default `--panel-dir`) |
+| `/opt/botpanel` | source and build (default `--panel-dir`, and where the installer moves the project when the clone lives inside a home directory) |
 | `/etc/botpanel.env` | environment file (mode `0600`) |
 | `/etc/systemd/system/botpanel.service` | the unit file |
 | `/var/lib/botpanel` | data directory (`BOTPANEL_DATA_DIR`) |

@@ -249,6 +249,64 @@ else
 fi
 
 echo
+echo "  case F — the project lives inside a home directory (the default --panel-dir)"
+prepare_repo
+rm -f "${SYSTEMCTL_LOG}" /etc/systemd/system/botpanel.service
+# A real /home path: the installer only treats /root and /home as homes.
+HOME_ROOT="/home/botpanel-install-test"
+rm -rf "${HOME_ROOT}" /opt/botpanel
+STUB_UNIT="active"
+STUB_CURL="ok"
+HOME_REPO="${HOME_ROOT}/discord-bot-host"
+mkdir -p "${HOME_REPO}"
+tar -C "${REPO}" -cf - . | tar -C "${HOME_REPO}" -xf -
+log="${WORK}/f.log"
+code=0
+PATH="${STUBS}:${PATH}" bash "${HOME_REPO}/scripts/install.sh" --no-deps \
+  --data-dir "${WORK}/data-f" --env-file "${WORK}/env-f" --port 8097 >"${log}" 2>&1 || code=$?
+out="$(cat "${log}")"
+expect_exit "exits zero" "${code}" "0"
+expect_contains "warns that the project is inside a home directory" "${out}" "inside a home directory"
+expect_contains "relocates to the documented location" "${out}" "project: /opt/botpanel"
+expect_file "copied the build out of the home directory" "/opt/botpanel/server/dist/index.js"
+if grep -q '^WorkingDirectory=/opt/botpanel' /etc/systemd/system/botpanel.service; then
+  ok "unit points at the relocated project"
+else
+  bad "unit points at the relocated project"
+fi
+if grep -q '^ProtectHome=yes' /etc/systemd/system/botpanel.service; then
+  ok "keeps the stricter ProtectHome=yes after relocating"
+else
+  bad "keeps the stricter ProtectHome=yes after relocating"
+fi
+
+echo
+echo "  case G — an explicit --panel-dir inside a home directory"
+prepare_repo
+rm -f "${SYSTEMCTL_LOG}" /etc/systemd/system/botpanel.service
+STUB_UNIT="active"
+STUB_CURL="ok"
+log="${WORK}/g.log"
+code=0
+PATH="${STUBS}:${PATH}" bash "${REPO}/scripts/install.sh" --no-deps \
+  --panel-dir "${HOME_ROOT}/panel" \
+  --data-dir "${WORK}/data-g" --env-file "${WORK}/env-g" --port 8096 >"${log}" 2>&1 || code=$?
+out="$(cat "${log}")"
+expect_exit "exits zero" "${code}" "0"
+expect_contains "explains the ProtectHome downgrade" "${out}" "ProtectHome=read-only"
+expect_file "built inside the home directory" "${HOME_ROOT}/panel/server/dist/index.js"
+if grep -q '^ProtectHome=read-only' /etc/systemd/system/botpanel.service; then
+  ok "unit uses ProtectHome=read-only for a home path"
+else
+  bad "unit uses ProtectHome=read-only for a home path"
+fi
+if grep -v '^#' /etc/systemd/system/botpanel.service | grep -q '@[A-Z_]*@'; then
+  bad "rendered every placeholder in the unit"
+else
+  ok "rendered every placeholder in the unit"
+fi
+
+echo
 if [[ "${failures}" -eq 0 ]]; then
   echo "  all installer cases passed"
   exit 0

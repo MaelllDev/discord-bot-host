@@ -25,6 +25,35 @@ files are touched, so the machine is left exactly as it was and the script exits
 | Build only, run the panel by hand | `sudo bash scripts/install.sh --no-service` (prints the exact start command, never claims an installation). |
 | Active development | `npm install` then `npm run dev` + `npm run dev:web` — no root needed. See [development.md](development.md). |
 
+## The service restarts forever with `status=200/CHDIR`
+
+```
+botpanel.service: Changing to the requested working directory failed: No such file or directory
+botpanel.service: Failed at step CHDIR spawning /usr/bin/node: No such file or directory
+Process: ExecStart=/usr/bin/node .../server/dist/index.js (code=exited, status=200/CHDIR)
+```
+
+The unit hardens the service with `ProtectHome=yes`, which makes `/root`, `/home` and `/run/user`
+**invisible** to it. If the project lives inside one of those directories (`/root/discord-bot-host`,
+`/home/you/botpanel`…), systemd cannot enter it, so the unit restarts in a loop and the panel never
+answers. Two ways out:
+
+```bash
+# Option A (recommended) — move the project to the documented location
+sudo systemctl stop botpanel
+sudo mv /root/discord-bot-host /opt/botpanel
+sudo sed -i 's|/root/discord-bot-host|/opt/botpanel|g' /etc/systemd/system/botpanel.service
+sudo systemctl daemon-reload && sudo systemctl restart botpanel
+
+# Option B — keep it where it is and relax that one directive
+sudo sed -i 's|^ProtectHome=yes|ProtectHome=read-only|' /etc/systemd/system/botpanel.service
+sudo systemctl daemon-reload && sudo systemctl restart botpanel
+```
+
+Re-running the installer also fixes it: it now detects a project inside a home directory, warns and
+installs to `/opt/botpanel` (or uses `ProtectHome=read-only` when `--panel-dir` points into a home on
+purpose).
+
 ## The installer fails the health check
 
 ```

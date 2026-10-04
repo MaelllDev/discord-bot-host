@@ -42,6 +42,8 @@ ENV_FILE="/etc/botpanel.env"
 PORT="${BOTPANEL_PORT:-8080}"
 SERVICE_NAME="botpanel"
 SERVICE_USER="root"
+# Rastreado para saber se a localização do painel foi uma escolha do usuário.
+PANEL_DIR_GIVEN=0
 INSTALL_SERVICE=1
 INSTALL_DEPS=1
 FORCE=0
@@ -52,7 +54,9 @@ usage() {
 Usage: sudo bash scripts/install.sh [options]
 
 Options:
-  --panel-dir <path>    Where the project lives (default: the repository root)
+  --panel-dir <path>    Where the project lives (default: the repository root, or
+                        /opt/botpanel when the repository is inside a home
+                        directory such as /root or /home/<user>)
   --data-dir <path>     Data directory (default: /var/lib/botpanel)
   --env-file <path>     Environment file (default: /etc/botpanel.env)
   --port <number>       HTTP port written to the environment file (default: 8080)
@@ -75,7 +79,7 @@ USAGE
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --panel-dir) PANEL_DIR="${2:-}"; shift 2 ;;
+    --panel-dir) PANEL_DIR="${2:-}"; PANEL_DIR_GIVEN=1; shift 2 ;;
     --data-dir) DATA_DIR="${2:-}"; shift 2 ;;
     --env-file) ENV_FILE="${2:-}"; shift 2 ;;
     --port) PORT="${2:-}"; shift 2 ;;
@@ -139,6 +143,46 @@ Useful checks:
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 [[ -n "${PANEL_DIR}" ]] || PANEL_DIR="${BOTPANEL_DIR:-${REPO_DIR}}"
+[[ -n "${BOTPANEL_DIR:-}" ]] && PANEL_DIR_GIVEN=1
+
+# The systemd unit hardens the service with `ProtectHome=yes`, which makes
+# /root and /home invisible to it. A project installed inside a home directory
+# therefore fails at boot with "Changing to the requested working directory
+# failed" (status=200/CHDIR) — and cloning as root or as a regular user puts the
+# repository exactly there. When the location was not chosen explicitly, the
+# default becomes /opt/botpanel (what docs/installation.md recommends); when the
+# user insists on a home path, the unit switches that one directive to
+# `read-only` instead of leaving a service that can never start.
+in_home_dir() {
+  case "$1" in
+    /root|/root/*|/home|/home/*) return 0 ;;
+    *) return 1 ;;
+  esac
+}
+
+# Only relevant in production mode: with --no-service nothing is installed as a
+# service, so ProtectHome never touches the build.
+PROTECT_HOME="yes"
+if [[ "${INSTALL_SERVICE}" -eq 1 ]]; then
+  if [[ "${PANEL_DIR_GIVEN}" -eq 0 ]] && in_home_dir "${PANEL_DIR}"; then
+    printf '\n' >&2
+    warn "The project is inside a home directory (${PANEL_DIR})."
+    printf '    The systemd service runs with ProtectHome=yes, which hides /root and /home\n' >&2
+    printf '    from it — the unit would never start (status=200/CHDIR).\n' >&2
+    printf '    Installing to the documented location instead: /opt/botpanel\n' >&2
+    printf '    Use --panel-dir <path> to choose another directory.\n\n' >&2
+    PANEL_DIR="/opt/botpanel"
+  fi
+
+  if in_home_dir "${PANEL_DIR}"; then
+    PROTECT_HOME="read-only"
+    printf '\n' >&2
+    warn "Installing inside a home directory (${PANEL_DIR}) as requested."
+    printf '    The unit uses ProtectHome=read-only so the service can read its own build;\n' >&2
+    printf '    ProtectHome=yes would hide the directory and the service would not start.\n' >&2
+    printf '    /opt/botpanel keeps the stricter default.\n\n' >&2
+  fi
+fi
 
 log "BotPanel installer"
 log "  project: ${PANEL_DIR}"
@@ -326,6 +370,7 @@ if [[ "${INSTALL_SERVICE}" -eq 1 ]]; then
       -e "s|@ENV_FILE@|${ENV_FILE}|g" \
       -e "s|@NODE_BIN@|${NODE_BIN}|g" \
       -e "s|@SERVICE_USER@|${SERVICE_USER}|g" \
+      -e "s|@PROTECT_HOME@|${PROTECT_HOME}|g" \
       "${PANEL_DIR}/deploy/botpanel.service" > "/etc/systemd/system/${SERVICE_NAME}.service"
   chmod 0644 "/etc/systemd/system/${SERVICE_NAME}.service"
   systemctl daemon-reload

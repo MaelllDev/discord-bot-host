@@ -1,6 +1,6 @@
 {
   "name": "botpanel",
-  "version": "1.0.5",
+  "version": "1.0.6",
   "private": true,
   "type": "module",
   "description": "Painel web privado para hospedar e administrar bots e aplicações isoladas em Docker",

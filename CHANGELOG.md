@@ -10,6 +10,28 @@ before being published, so there is no earlier version history to import.
 
 ## [Unreleased]
 
+## [1.0.6] - 2026-10-04
+
+Added `scripts/update.sh`, a one-command updater for existing installations:
+`curl -fsSL .../scripts/update.sh | sudo bash`. It locates the panel through its systemd unit (so it
+works whatever `--panel-dir` was used), brings the code to the newest published release — the newest
+tag when no release is published, `git` when the directory is a clone and the release tarball
+otherwise — then rebuilds through `scripts/install.sh` and waits for `/api/health`. A build that never
+comes up is rolled back to the previous one and the service restarted with it. `--check` reports the
+installed and available versions without changing anything, and `--ref <tag|branch>` pins a version.
+The data directory and `/etc/botpanel.env` are never touched. Covered by
+`scripts/tests/update.test.sh`.
+
+Fixed the installer failing on the most natural clone location: a project installed inside a home
+directory (`/root/discord-bot-host`, `/home/<user>/…`) never started, because the systemd unit
+hardens the service with `ProtectHome=yes` and that directive makes `/root` and `/home` invisible to
+it — systemd then failed to enter the working directory and the unit restarted forever with
+`status=200/CHDIR`. When the location was not chosen explicitly and the clone lives in a home
+directory, the installer now warns and installs to `/opt/botpanel` (keeping the strict
+`ProtectHome=yes`); when `--panel-dir` points into a home directory on purpose, the unit is rendered
+with `ProtectHome=read-only` so the service can still read its own build. `scripts/tests/install.test.sh`
+covers both paths.
+
 ## [1.0.5] - 2026-09-27
 
 Password recovery was reworked so no credential ever reaches the log. The login screen now always offers "Forgot your password?": when the panel owns the password (no BOTPANEL_PASSWORD / BOTPANEL_PASSWORD_HASH), it issues a single-use token valid for 15 minutes, written only to <DATA_DIR>/reset-token with mode 0600, and sets a new password (at least 8 characters) through it — the token is consumed on use, the bootstrap .initial-password file is deleted so the old password stops working, and every open session is invalidated. When the password comes from the environment, the entry explains how to change it on the server instead of pretending to reset it. Both endpoints are rate limited per client address (token creation: one request per 10 minutes; redemption: six attempts per 15 minutes) and invalid, expired or already-used tokens get the same response, so states cannot be enumerated. The password generated on first boot is no longer written to the journal either: the log only points to the 0600 file.
@@ -106,7 +128,8 @@ First public release.
 - Test suite: backend unit/integration tests, frontend render tests (jsdom) and a Docker
   end-to-end suite covering the full container lifecycle.
 
-[Unreleased]: https://github.com/MaelllDev/discord-bot-host/compare/v1.0.5...HEAD
+[Unreleased]: https://github.com/MaelllDev/discord-bot-host/compare/v1.0.6...HEAD
+[1.0.6]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.0.6
 [1.0.5]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.0.5
 [1.0.4]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.0.4
 [1.0.3]: https://github.com/MaelllDev/discord-bot-host/releases/tag/v1.0.3

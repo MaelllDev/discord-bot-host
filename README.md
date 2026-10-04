@@ -391,6 +391,16 @@ sudo bash scripts/install.sh   # rebuilds and restarts; keeps .env and data
 `scripts/install.sh` is idempotent, so the update path is the same as the installation path. Your
 applications keep running during the rebuild; the service restart is a couple of seconds.
 
+For a one-command update — it finds the panel through its systemd unit, pulls the newest release,
+rebuilds and restarts, and rolls back to the previous build if the new one does not come up:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/MaelllDev/discord-bot-host/main/scripts/update.sh | sudo bash
+```
+
+`--check` only reports the installed and available versions. See
+[docs/installation.md](docs/installation.md#updating-an-existing-installation).
+
 The panel's own version appears in the **System** page and comes from `server/package.json`, which
 is kept in sync by the release script (see [docs/releasing.md](docs/releasing.md)).
 
